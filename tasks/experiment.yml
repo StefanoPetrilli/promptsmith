@@ -26,3 +26,20 @@ tasks:
         --prompts experiments/svhn_prompts.txt
         --out experiments/out/flux2
         --size 768 --steps 8 --dtype fp16
+
+  florence2-label:
+    desc: Label images with Florence-2-base-ft OCR+boxes -> YOLO format
+    cmds:
+      - .venv/bin/python experiments/try_florence2.py
+        --images experiments/out/flux2
+        --out experiments/out/flux2_labels
+        --task ocr
+        --max 10
+
+  qwen25vl-label:
+    desc: Label images with Qwen2.5-VL-3B-Instruct (NF4) per-digit YOLO boxes
+    cmds:
+      - .venv/bin/python experiments/try_qwen25vl.py
+        --images experiments/out/flux2
+        --out experiments/out/flux2_labels_qwen25
+        --limit 10

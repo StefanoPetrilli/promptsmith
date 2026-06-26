@@ -1,0 +1,14 @@
+version: "3"
+
+# Baseline uses real-only data; run uses the mixed (real+synthetic) data.
+
+tasks:
+  baseline:
+    desc: Fine-tune YOLO on real-only dataset
+    cmds:
+      - .venv/bin/python -m numeri train-baseline
+
+  run:
+    desc: Fine-tune YOLO on real + synthetic mixed dataset
+    cmds:
+      - .venv/bin/python -m numeri train-run

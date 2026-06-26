@@ -1,0 +1,12 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Mix real + synthetic into data/mixed at the configured ratio (test split real-only)
+    sources:
+      - data/real_yolo
+      - data/synthetic
+    generates:
+      - data/mixed/data.yaml
+    cmds:
+      - .venv/bin/python -m numeri mix-build

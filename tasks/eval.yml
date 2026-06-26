@@ -1,0 +1,12 @@
+version: "3"
+
+tasks:
+  run:
+    desc: Evaluate a single trained YOLO run on the (real) test split
+    cmds:
+      - .venv/bin/python -m numeri eval-run
+
+  compare:
+    desc: Compare baseline (real-only) vs augmented (real+synthetic) runs
+    cmds:
+      - .venv/bin/python -m numeri eval-compare

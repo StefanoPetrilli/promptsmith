@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# data & runs (large, regenerable)
+data/raw/
+data/real_yolo/
+data/synthetic/
+data/mixed/
+data/runs/
+*.mat
+*.png
+*.jpg
+*.jpeg
+
+# models cache
+models/
+.cache/
+
+# misc
+.DS_Store
+.env

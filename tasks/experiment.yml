@@ -1,0 +1,19 @@
+version: "3"
+
+tasks:
+  sana:
+    desc: Run standalone SANA quality probe (saves PNGs to experiments/out/sana)
+    cmds:
+      - .venv/bin/python experiments/try_sana.py
+        --model mit-han-lab/sana-pipeline-DMD-4steps-512
+        --prompts experiments/svhn_prompts.txt
+        --out experiments/out/sana
+        --size 512 --steps 4 --guidance 4.0 --dtype fp16 --offload
+
+  sana-1024:
+    desc: Try the 1024px SANA variant (likely needs --offload on 6 GB VRAM)
+    cmds:
+      - .venv/bin/python experiments/try_sana.py
+        --model mit-han-lab/sana-pipeline-DMD-4steps-1024
+        --out experiments/out/sana_1024
+        --size 1024 --steps 4 --offload

@@ -1,0 +1,13 @@
+# SVHN-style prompts for SANA quality probing. One prompt per line.
+# Goal: check whether SANA can render readable, varied house-number digits
+# in plausible street-level scenes. We'll eyeball the saved grid.
+a street-level photo of a house number 7 on a residential brick facade, large black digits on a white plaque, daytime, slight side angle
+a street view photo of a blue house number plaque reading 42 mounted on a wooden gate, bright daylight, slightly blurred background
+a real photo of digits 138 painted in yellow on a dark green metal mailbox, urban sidewalk, perspective view
+a cropped photo of a white house number plate with digits 305 in black serif font, attached to a stucco wall, soft shadows
+a noisy street photo of a red house number 99 on a faded painted wall, low light, grainy
+a daytime photo of house number 411 in tall thin digits, beige painted wall, sharp focus
+a photo of a house number 25 on a small ceramic tile next to a brown door, bright sun
+a street photo of large house numbers 776 in red on a concrete pillar, daytime, slight overhead angle
+a clean photo of digits 3 on a modern silver plaque, simple white wall, studio lighting
+a casual phone photo of house number 1204 in black on a white plate, slightly tilted, residential street

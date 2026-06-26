@@ -19,6 +19,7 @@ data/runs/
 # models cache
 models/
 .cache/
+experiments/out/
 
 # misc
 .DS_Store

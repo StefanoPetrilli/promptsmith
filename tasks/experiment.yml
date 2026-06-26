@@ -17,3 +17,12 @@ tasks:
         --model Efficient-Large-Model/Sana_600M_1024px_diffusers
         --out experiments/out/sana_1024
         --size 1024 --steps 20 --offload
+
+  flux2:
+    desc: FLUX.2-klein-4B NF4 probe (Qwen3 embeds on CPU, NF4 transformer on 6 GB GPU)
+    cmds:
+      - .venv/bin/python experiments/try_flux2.py
+        --model black-forest-labs/FLUX.2-klein-4B
+        --prompts experiments/svhn_prompts.txt
+        --out experiments/out/flux2
+        --size 768 --steps 8 --dtype fp16

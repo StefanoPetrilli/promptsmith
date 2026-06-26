@@ -37,8 +37,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--images", default="experiments/out/flux2")
     p.add_argument("--out", default="experiments/out/flux2_labels_qwen25")
     p.add_argument("--limit", type=int, default=0, help="0 = all; else first N")
-    p.add_argument("--nf4", action="store_true", default=True,
-                   help="Load LLM in bitsandbytes NF4 (default, required for 6 GB)")
+    p.add_argument("--quant", choices=["fp16", "int8", "nf4"], default="fp16",
+                   help="Weight format: fp16 (CPU offload, most accurate), int8, nf4 (fastest)")
+    p.add_argument("--gpu-mem", default="5GiB",
+                   help="Max GPU RAM for device_map='auto' offloading (e.g. 5GiB)")
     p.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="fp16")
     return p.parse_args()
 
@@ -239,24 +241,25 @@ def main() -> int:
     from transformers import Qwen2_5_VLForConditionalGeneration, Qwen2_5_VLProcessor, BitsAndBytesConfig
 
     dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[a.dtype]
-    extra = {}
-    if a.nf4:
+    max_memory = {0: a.gpu_mem, "cpu": "20GiB"}
+    extra = {
+        "torch_dtype": dtype,
+        "device_map": "auto",
+        "max_memory": max_memory,
+        "low_cpu_mem_usage": True,
+    }
+    if a.quant == "nf4":
         extra["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_use_double_quant=True,
             bnb_4bit_compute_dtype=dtype,
         )
-        # ensure model works with 4-bit by keeping embeddings/vision fp16
-        extra["torch_dtype"] = dtype
-        extra["device_map"] = "auto"
-        extra["low_cpu_mem_usage"] = True
-    else:
-        extra["torch_dtype"] = dtype
-        extra["device_map"] = "auto"
-        extra["low_cpu_mem_usage"] = True
+    elif a.quant == "int8":
+        extra["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
+    # fp16 needs no quantization_config
 
-    log.info("Loading %s (nf4=%s)...", a.model, a.nf4)
+    log.info("Loading %s (quant=%s, gpu_mem=%s)...", a.model, a.quant, a.gpu_mem)
     processor = Qwen2_5_VLProcessor.from_pretrained(a.model, trust_remote_code=True)
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         a.model, trust_remote_code=True, **extra

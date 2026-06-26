@@ -31,12 +31,12 @@ log = logging.getLogger("try_sana")
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="SANA quality probe for SVHN-style synthetic images")
-    p.add_argument("--model", default="mit-han-lab/sana-pipeline-DMD-4steps-512",
-                   help="HF id of a SANA pipeline (e.g. ...-512, ...-1024, DMD 4-step variants).")
+    p.add_argument("--model", default="Efficient-Large-Model/Sana_600M_512px_diffusers",
+                   help="HF id of a diffusers SanaPipeline (600M/512px fits ~6 GB VRAM with --offload).")
     p.add_argument("--prompts", default="experiments/svhn_prompts.txt")
     p.add_argument("--out", default="experiments/out/sana")
     p.add_argument("--size", type=int, default=512, help="edge of square image (matches model config ideally)")
-    p.add_argument("--steps", type=int, default=4)
+    p.add_argument("--steps", type=int, default=20, help="DPM solver steps (use ~20 for non-DMD SANA; DMD variants can use 4)")
     p.add_argument("--guidance", type=float, default=4.0)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="fp16")

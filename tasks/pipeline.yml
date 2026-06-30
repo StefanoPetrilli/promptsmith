@@ -1,0 +1,71 @@
+version: "3"
+
+# The 4-step synthetic-wrench pipeline (see PLAN.md).
+# Each step has a `*-test` task that runs on a handful of images for verification.
+#
+#   prompts:generate        step 1 — 1000 varied wrench prompts -> data/prompts.{jsonl,txt}
+#   prompts:test            step 1 — 12 wrench prompts -> data/prompts_test.*
+#   images:generate         step 2 — FLUX.2-klein-4B render all prompts -> data/images/
+#   images:test             step 2 — render first 3 test prompts -> data/images_test/
+#   label:run               step 3 — SAM 3 text-grounded wrench boxes -> data/labels/
+#   label:test              step 3 — label first 3 test images -> data/labels_test/
+#   train:run               step 4 — assemble dataset + fine-tune YOLO -> data/dataset/
+#   train:test              step 4 — 1-epoch smoke on the test images -> data/dataset_test/
+#   visualize:run           step 5 — overlay SAM 3 masks + boxes -> data/visuals/
+#   visualize:test          step 5 — overlay first 3 test images -> data/visuals_test/
+
+vars:
+  PY: .venv/bin/python
+  MODEL: black-forest-labs/FLUX.2-klein-4B
+  SAM3_CKPT: models/sam3/sam3.pt
+
+tasks:
+  generate:
+    desc: "Step 1: generate 1000 varied prompts -> data/prompts.{jsonl,txt}"
+    cmds:
+      - "{{.PY}} pipeline/generate_prompts.py --n 1000 --out data"
+
+  test:
+    desc: "Step 1 (test): generate 12 prompts -> data/prompts_test.*"
+    cmds:
+      - "{{.PY}} pipeline/generate_prompts.py --test --out data"
+
+  images:
+    desc: "Step 2: render all prompts with FLUX.2-klein-4B -> data/images/"
+    cmds:
+      - "{{.PY}} pipeline/generate_images.py --model {{.MODEL}} --prompts data/prompts.txt --out data/images --size 768 --steps 8"
+
+  images-test:
+    desc: "Step 2 (test): render first 3 test prompts -> data/images_test/"
+    cmds:
+      - "{{.PY}} pipeline/generate_images.py --model {{.MODEL}} --prompts data/prompts_test.txt --out data/images_test --size 768 --steps 8 --limit 3"
+
+  label:
+    desc: "Step 3: label all images with SAM 3 (text prompt 'wrench', conf>=0.55) -> data/labels/"
+    cmds:
+      - "{{.PY}} pipeline/label_images.py --images data/images/manifest.jsonl --out data/labels --model-path {{.SAM3_CKPT}} --confidence 0.55"
+
+  label-test:
+    desc: "Step 3 (test): label first 3 test images with SAM 3 (conf>=0.55) -> data/labels_test/"
+    cmds:
+      - "{{.PY}} pipeline/label_images.py --images data/images_test/manifest.jsonl --out data/labels_test --limit 3 --model-path {{.SAM3_CKPT}} --confidence 0.55"
+
+  train:
+    desc: "Step 4: assemble single-class YOLO dataset + fine-tune -> data/dataset/"
+    cmds:
+      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels --out data/dataset --base models/yolov8n.pt --epochs 50 --imgsz 640 --batch 16"
+
+  train-test:
+    desc: "Step 4 (test): 1-epoch smoke on the test images -> data/dataset_test/"
+    cmds:
+      - "{{.PY}} pipeline/train_yolo.py --images data/images_test --labels data/labels_test --out data/dataset_test --base models/yolov8n.pt --epochs 1 --imgsz 320 --batch 1 --allow-dummy-labels"
+
+  visualize:
+    desc: "Step 5: overlay SAM 3 segmentation + boxes on all images -> data/visuals/"
+    cmds:
+      - "{{.PY}} pipeline/visualize_labels.py --labels data/labels/labels.jsonl --out data/visuals"
+
+  visualize-test:
+    desc: "Step 5 (test): overlay first 3 test images -> data/visuals_test/"
+    cmds:
+      - "{{.PY}} pipeline/visualize_labels.py --labels data/labels_test/labels.jsonl --out data/visuals_test --limit 3"

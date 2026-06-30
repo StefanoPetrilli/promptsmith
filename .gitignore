@@ -5,19 +5,16 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# data & runs (large, regenerable)
-data/raw/
-data/real_yolo/
-data/synthetic/
-data/mixed/
-data/runs/
+# data, runs & models (large, regenerable)
+data/
+runs/
+models/
 *.mat
 *.png
 *.jpg
 *.jpeg
+*.pt
 
-# models cache
-models/
 .cache/
 experiments/out/
 

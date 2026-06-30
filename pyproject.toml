@@ -22,6 +22,8 @@ dependencies = [
   "transformers>=4.40",
   "accelerate>=0.27",
   "scipy>=1.10",
+  "sam3>=0.1.1",
+  "iopath>=0.1.10",
 ]
 
 [project.optional-dependencies]

@@ -1,26 +1,15 @@
 #!/usr/bin/env python3
-"""Step 4 — fine-tune a YOLO detector on the labeled synthetic images.
+"""Step 5 — assemble a single-class (wrench) YOLO dataset and fine-tune.
 
-Assembles a YOLO dataset from an images dir + a labels dir (produced by steps 2 & 3),
-writes a `data.yaml`, and runs `ultralytics` YOLO fine-tuning. The detector is a
-**single-class** model: class 0 = `wrench` (the only object SAM 3 labels in step 3).
-
-Dataset assembly:
-  * images are paired with labels by filename stem (`img_0000.png` <-> `img_0000.txt`).
-  * split into train/val (default 80/20, at least 1 image in val).
-  * images/labels are symlinked into <out>/images/{train,val} and <out>/labels/{train,val}.
-
-Test mode: `--epochs 1 --imgsz 320 --batch 1` on a handful of images. Because the test may
-run before real labels exist, `--allow-dummy-labels` writes a placeholder centered box
-(digit 0) for any image with no label file, purely to exercise the training machinery.
+Pairs images with labels by stem, splits train/val (default 80/20), symlinks both into
+`<out>/{images,labels}/{train,val}`, writes `data.yaml`, and runs ultralytics training.
+`--allow-dummy-labels` writes a placeholder centered box for unlabeled images (smoke test).
 
 Usage:
-  # full run
   python pipeline/train_yolo.py --images data/images --labels data/labels \
-      --out data/dataset --base yolov8n.pt --epochs 50 --imgsz 640 --batch 16
-  # smoke test
+      --out data/dataset --base models/yolov8n.pt --epochs 50 --imgsz 640 --batch 16
   python pipeline/train_yolo.py --images data/images_test --labels data/labels_test \
-      --out data/dataset_test --base yolov8n.pt --epochs 1 --imgsz 320 --batch 1 \
+      --out data/dataset_test --base models/yolov8n.pt --epochs 1 --imgsz 320 --batch 1 \
       --allow-dummy-labels
 """
 from __future__ import annotations
@@ -37,7 +26,7 @@ CLASSES = ["wrench"]  # single-class detector (SAM 3 labels only wrenches)
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Assemble YOLO dataset + fine-tune (step 4).")
+    p = argparse.ArgumentParser(description="Assemble YOLO dataset + fine-tune (step 5).")
     p.add_argument("--images", required=True, help="dir of images (step 2 output)")
     p.add_argument("--labels", required=True, help="dir of YOLO .txt labels (step 3 output)")
     p.add_argument("--out", required=True, help="dataset dir to assemble (data.yaml written here)")

@@ -1,35 +1,12 @@
 #!/usr/bin/env python3
-"""Step 3 — label generated images with **Segment Anything 3 (SAM 3)**.
+"""Step 3 — label images with SAM 3 (text prompt "wrench").
 
-The dataset direction changed: instead of a remote Qwen VLM that names per-digit boxes,
-we now run **SAM 3 locally** as an open-vocabulary text-grounded segmenter. SAM 3 is given
-the text prompt "wrench" and returns, for every image, a set of masks + bounding boxes +
-confidence scores for the wrenches it finds. We keep the boxes (single class, id 0 =
-"wrench") and write them in YOLO format (`0 x_center y_center width height`, normalized)
-as one `.txt` per image. A `labels.jsonl` audit log records the raw boxes and scores.
+Writes one YOLO `.txt` per image (`0 xc yc bw bh`, normalized; single class 0 = wrench), a
+`labels.jsonl` audit with raw boxes + scores, and 16-bit instance-mask PNGs
+(`masks/<stem>.png`, pixel = instance id, 0 = bg) for step 5.
 
-Instance **masks** are also persisted (one `masks/<stem>.png` per image, a 16-bit PNG
-where pixel value = instance id, 0 = background) so downstream steps — notably step 5,
-`visualize_labels.py` — can overlay the segmentation without reloading SAM 3.
-
-Why local SAM 3 instead of a remote VLM:
-  * no API key / network needed — the whole pipeline runs offline on the 6 GB GPU;
-  * SAM 3 text grounding gives tight, instance-level masks for an open vocabulary, which is
-    exactly what we need for a single-class "wrench" detector.
-
-Model weights: `facebook/sam3` is gated; we use the open mirror `1038lab/sam3`
-(`sam3.pt`, ~3.45 GB) by default. Override with `--model-path`. The `sam3` pip package is
-required (the BPE vocab file used by its text tokenizer is bundled under
-`.venv/.../assets/`; see `task env:setup`).
-
-GPU budget on the RTX 2060 (6 GB): SAM 3 ViT-L backbone @ resolution 1008 fits in ~3.5 GB of
-weights; inference activations are modest. `--resolution 768` can be used to be safe.
-
-Test mode: `--limit 3` labels just the first 3 images.
-
-Usage:
-  python pipeline/label_images.py --images data/images/manifest.jsonl --out data/labels
-  python pipeline/label_images.py --images data/images_test/manifest.jsonl --out data/labels_test --limit 3
+Weights: `facebook/sam3` is gated, so the open mirror `1038lab/sam3` (`sam3.pt`) is used by
+default (`--model-path`). `--limit N` labels only the first N images.
 """
 from __future__ import annotations
 
@@ -41,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
+from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s :: %(message)s")
 log = logging.getLogger("label")
@@ -151,8 +129,7 @@ def main() -> int:
     audit = out_dir / "labels.jsonl"
     n_ok, n_empty = 0, 0
     with audit.open("w", encoding="utf-8") as af:
-        for i, img_path in enumerate(images):
-            log.info("[%d/%d] %s", i + 1, len(images), img_path.name)
+        for i, img_path in enumerate(tqdm(images, desc="label", unit="img")):
             try:
                 img = Image.open(img_path).convert("RGB")
                 w, h = img.size
@@ -184,8 +161,8 @@ def main() -> int:
                 n_ok += 1
             else:
                 n_empty += 1
-            log.info("  -> %d wrench boxes (scores=%s)", len(yolo_lines),
-                     [round(s, 2) for s in scores])
+            tqdm.write(f"  {img_path.name}: {len(yolo_lines)} wrench boxes "
+                       f"(scores={[round(s, 2) for s in scores]})")
             torch.cuda.empty_cache()
 
     log.info("Done. %d/%d images with >=1 box, %d empty. Audit: %s",

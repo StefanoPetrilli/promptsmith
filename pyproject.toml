@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "numeri"
 version = "0.0.1"
-description = "Local synthetic dataset generation + auto-labeling pipeline for YOLO fine-tuning, validated on SVHN."
+description = "Local synthetic dataset generation + auto-labeling pipeline for YOLO fine-tuning."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "stefanopetrilli" }]
@@ -15,27 +15,20 @@ dependencies = [
   "torchvision>=0.16",
   "numpy>=1.24",
   "pillow>=10.0",
-  "pyyaml>=6.0",
   "tqdm>=4.65",
   "ultralytics>=8.1",
   "diffusers>=0.27",
   "transformers>=4.40",
   "accelerate>=0.27",
+  "bitsandbytes>=0.43",
   "scipy>=1.10",
   "sam3>=0.1.1",
   "iopath>=0.1.10",
+  "huggingface_hub>=0.20",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.3"]
-quant = ["bitsandbytes>=0.43"]
-
-[project.scripts]
-numeri = "numeri.cli:main"
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["numeri*"]
 
 [tool.ruff]
 line-length = 100

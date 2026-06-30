@@ -9,10 +9,10 @@ version: "3"
 #   images:test             step 2 — render first 3 test prompts -> data/images_test/
 #   label:run               step 3 — SAM 3 text-grounded wrench boxes -> data/labels/
 #   label:test              step 3 — label first 3 test images -> data/labels_test/
-#   train:run               step 4 — assemble dataset + fine-tune YOLO -> data/dataset/
-#   train:test              step 4 — 1-epoch smoke on the test images -> data/dataset_test/
-#   visualize:run           step 5 — overlay SAM 3 masks + boxes -> data/visuals/
-#   visualize:test          step 5 — overlay first 3 test images -> data/visuals_test/
+#   visualize:run           step 4 — overlay SAM 3 masks + boxes -> data/visuals/
+#   visualize:test          step 4 — overlay first 3 test images -> data/visuals_test/
+#   train:run               step 5 — assemble dataset + fine-tune YOLO -> data/dataset/
+#   train:test              step 5 — 1-epoch smoke on the test images -> data/dataset_test/
 
 vars:
   PY: .venv/bin/python
@@ -50,22 +50,22 @@ tasks:
     cmds:
       - "{{.PY}} pipeline/label_images.py --images data/images_test/manifest.jsonl --out data/labels_test --limit 3 --model-path {{.SAM3_CKPT}} --confidence 0.55"
 
-  train:
-    desc: "Step 4: assemble single-class YOLO dataset + fine-tune -> data/dataset/"
-    cmds:
-      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels --out data/dataset --base models/yolov8n.pt --epochs 50 --imgsz 640 --batch 16"
-
-  train-test:
-    desc: "Step 4 (test): 1-epoch smoke on the test images -> data/dataset_test/"
-    cmds:
-      - "{{.PY}} pipeline/train_yolo.py --images data/images_test --labels data/labels_test --out data/dataset_test --base models/yolov8n.pt --epochs 1 --imgsz 320 --batch 1 --allow-dummy-labels"
-
   visualize:
-    desc: "Step 5: overlay SAM 3 segmentation + boxes on all images -> data/visuals/"
+    desc: "Step 4: overlay SAM 3 segmentation + boxes on all images -> data/visuals/"
     cmds:
       - "{{.PY}} pipeline/visualize_labels.py --labels data/labels/labels.jsonl --out data/visuals"
 
   visualize-test:
-    desc: "Step 5 (test): overlay first 3 test images -> data/visuals_test/"
+    desc: "Step 4 (test): overlay first 3 test images -> data/visuals_test/"
     cmds:
       - "{{.PY}} pipeline/visualize_labels.py --labels data/labels_test/labels.jsonl --out data/visuals_test --limit 3"
+
+  train:
+    desc: "Step 5: assemble single-class YOLO dataset + fine-tune -> data/dataset/"
+    cmds:
+      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels --out data/dataset --base models/yolov8n.pt --epochs 50 --imgsz 640 --batch 16"
+
+  train-test:
+    desc: "Step 5 (test): 1-epoch smoke on the test images -> data/dataset_test/"
+    cmds:
+      - "{{.PY}} pipeline/train_yolo.py --images data/images_test --labels data/labels_test --out data/dataset_test --base models/yolov8n.pt --epochs 1 --imgsz 320 --batch 1 --allow-dummy-labels"

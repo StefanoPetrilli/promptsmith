@@ -1,23 +1,12 @@
 #!/usr/bin/env python3
-"""Step 2 — render prompts into images with FLUX.2-klein-4B (NF4, 6 GB Turing GPU).
+"""Step 2 — render prompts into images with FLUX.2-klein-4B (NF4, on a 6 GB GPU).
 
-Reuses the validated loader from experiments/try_flux2.py:
+Qwen3 text encoder runs on CPU: embeddings are precomputed + cached to disk, then released
+(never goes on GPU). The 4B transformer is loaded as bitsandbytes NF4 on cuda; VAE is fp16
+on cuda. No `enable_model_cpu_offload` (would pull Qwen3 onto the GPU and OOM).
 
-  * Qwen3 text encoder runs on **CPU**, prompt embeddings are precomputed + cached to disk,
-    then Qwen3 is released (it never goes on the GPU).
-  * The 4B transformer is loaded as **bitsandbytes NF4** on cuda (~2 GB).
-  * VAE (fp16) on cuda. No `enable_model_cpu_offload` (would pull Qwen3 -> GPU and OOM).
-
-This script is a thin, importable wrapper around that loader so the pipeline can call it
-with any prompts file produced by step 1. Inputs are read as one prompt per line (`#`
-comments and blank lines skipped); outputs are PNGs named `img_{i:04d}.png` plus a
-`manifest.jsonl` recording prompt -> image mapping (used by step 3).
-
-Test mode: `--limit 3` renders just the first 3 prompts for a quick smoke test.
-
-Usage:
-  python pipeline/generate_images.py --prompts data/prompts.txt --out data/images
-  python pipeline/generate_images.py --prompts data/prompts_test.txt --out data/images_test --limit 3
+Inputs: one prompt per line (`#`/blank lines skipped). Outputs: `img_{i:04d}.png` plus a
+`manifest.jsonl` (prompt -> image, used by step 3). `--limit N` renders only the first N.
 """
 from __future__ import annotations
 
@@ -28,6 +17,8 @@ import json
 import logging
 import time
 from pathlib import Path
+
+from tqdm import tqdm
 
 import torch
 
@@ -76,7 +67,7 @@ def precompute_prompt_embeds(model_id: str, prompts: list[str], dtype: torch.dty
 
     embeds = []
     with torch.inference_mode():
-        for i, prompt in enumerate(prompts):
+        for i, prompt in enumerate(tqdm(prompts, desc="qwen3 embeds", unit="prompt")):
             e = Flux2KleinPipeline._get_qwen3_prompt_embeds(
                 text_encoder=te,
                 tokenizer=tok,
@@ -87,7 +78,6 @@ def precompute_prompt_embeds(model_id: str, prompts: list[str], dtype: torch.dty
                 hidden_states_layers=(9, 18, 27),
             )
             embeds.append(e.detach().to("cpu", dtype=dtype))
-            log.info("  embed [%d/%d] shape=%s", i + 1, len(prompts), tuple(e.shape))
 
     log.info("Releasing Qwen3 from CPU RAM...")
     del te
@@ -175,10 +165,10 @@ def main() -> int:
     manifest = out_dir / "manifest.jsonl"
     with manifest.open("a", encoding="utf-8") as mf:
         gen = torch.Generator(device="cuda").manual_seed(a.seed)
-        for i, (prompt, pe) in enumerate(zip(prompts, embeds)):
+        for i, (prompt, pe) in enumerate(
+            tqdm(zip(prompts, embeds), total=len(prompts), desc="generate", unit="img")
+        ):
             pe_cuda = pe.to("cuda", dtype=dtype)
-            log.info("[%d/%d] generating (steps=%s, size=%s): %s",
-                     i + 1, len(prompts), a.steps, a.size, prompt[:80])
             t0 = time.time()
             try:
                 img = pipe(
@@ -195,7 +185,8 @@ def main() -> int:
             img.save(path)
             mf.write(json.dumps({"index": i, "image": str(path), "prompt": prompt}) + "\n")
             mf.flush()
-            log.info("  -> saved %s (%.1fs)", path, time.time() - t0)
+            dt = time.time() - t0
+            tqdm.write(f"  saved {path.name} ({dt:.1f}s)")
             torch.cuda.empty_cache()
 
     log.info("Done. %d images in %s (manifest: %s)", len(prompts), out_dir, manifest)

@@ -1,21 +1,12 @@
 version: "3"
 
-# Root Taskfile — includes per-namespace task files from tasks/.
 vars:
-  PYTHON: .venv/bin/python
+  PY: .venv/bin/python
   PIP: .venv/bin/pip
-  CONFIG: "{{.NUMERI_CONFIG | default \"config/local.yaml\"}}"
 
 includes:
-  pipeline: tasks/pipeline.yml
   env: tasks/env.yml
-  dataset: tasks/dataset.yml
-  image-generation: tasks/image-generation.yml
-  labeling: tasks/labeling.yml
-  mix: tasks/mix.yml
-  train: tasks/train.yml
-  eval: tasks/eval.yml
-  experiment: tasks/experiment.yml
+  pipeline: tasks/pipeline.yml
 
 tasks:
   default:

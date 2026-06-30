@@ -1,61 +1,46 @@
-# Numeri
+# numeri
 
-A reusable, **model-agnostic**, fully-local pipeline that:
+A fully-local pipeline that builds a small **single-class YOLO detector** (target object:
+*"wrench"*) from scratch — synthetic images → auto-labels → fine-tune — runnable on a
+6 GB NVIDIA GPU.
 
-1. **Generates** a synthetic image dataset with small models (typically diffusion),
-2. **Auto-labels** it incl. YOLO bounding boxes with small vision-language models,
-3. **Mixes** it with a real dataset, and
-4. **Fine-tunes** a small YOLO detector and compares against a real-only baseline.
+## Stages
 
-Validated on the **Street View House Numbers (SVHN)** dataset. See
-[`SPECIFICATIONS.md`](SPECIFICATIONS.md) for the full design.
+| # | Task | What it does |
+|---|------|--------------|
+| 1 | `pipeline:generate` (`--test`) | Write N varied *"one wrench"* prompts → `data/prompts.{jsonl,txt}` |
+| 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (NF4, Qwen3 embeds on CPU) → `data/images/` |
+| 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` |
+| 4 | `pipeline:visualize` (`visualize-test`) | Overlay SAM 3 segmentation + boxes on the images → `data/visuals/` |
+| 5 | `pipeline:train` (`train-test`) | Assemble train/val split + fine-tune **YOLOv8n** → `data/dataset/runs/` |
+
+Each `*-test` variant runs on a handful of images for a quick smoke check.
 
 ## Requirements
-- Python 3.10+
-- NVIDIA GPU recommended (~6 GB VRAM enough for small backends). All backends fall back to
-  CPU but slowly.
-- [go-task](https://taskfile.dev) 3.x — install:
-  ```bash
-  sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin
-  ```
+- Python 3.10+, NVIDIA GPU (~6 GB VRAM). FLUX.2 Qwen3 encoder runs on CPU; SAM 3 + VAE + NF4 transformer on GPU.
+- [go-task](https://taskfile.dev) 3.x.
 
 ## Quickstart
 ```bash
-task env:setup          # create .venv, install numeri editable, sanity-check device
-task dataset:download   # fetch SVHN
-task dataset:parse      # convert to YOLO format under data/real_yolo/
+task env:setup          # venv + deps + fetch SAM 3 ckpt and CLIP BPE vocab
+task env:check         # show torch / CUDA availability
 
-# Configure backends: copy config/default.yaml -> config/local.yaml
-# and set generation.model.name / labeling.model.name (kept out of defaults).
-task image-generation:setup
-task image-generation:start
+# full pipeline (1000 prompts)
+task pipeline:generate
+task pipeline:images
+task pipeline:label
+task pipeline:train
+task pipeline:visualize
 
-task labeling:setup
-task labeling:start
-
-task mix:build
-task train:baseline     # real-only
-task train:run          # real + synthetic
-task eval:compare
+# or smoke-test each step
+task pipeline:test
+task pipeline:images-test
+task pipeline:label-test
+task pipeline:train-test
+task pipeline:visualize-test
 ```
 
-Each task is a thin wrapper around the `numeri` Python package; you can also run
-`python -m numeri <stage> [--config config/local.yaml]`.
-
-## Configuration
-All behavior is driven by `config/*.yaml`. Backends are referenced **by name** and resolved
-through `numeri.registry`, so switching models or use cases requires no code changes —
-just config (and, for a brand-new backend, registering one class).
-
-| Area | Key | What it selects |
-|------|-----|-----------------|
-| dataset | `dataset.name` | `numeri.datasets.<name>` adapter |
-| generation | `generation.backend` + `generation.prompt_template` | `numeri.generation.<backend>`, prompt schema |
-| labeling | `labeling.backend` | `numeri.labeling.<backend>` |
-| yolo | `yolo.version` | base weights / nano model |
-
-Files under `data/` and `models/` are gitignored (regenerable).
-
-## Project layout
-See the diagram in [`SPECIFICATIONS.md`](SPECIFICATIONS.md). Code lives in `numeri/`; task
-definitions in `tasks/*.yml`; entry root in `Taskfile.yml`.
+## Layout
+- `pipeline/` — the five stage scripts (importable, run directly via `python pipeline/<step>.py`).
+- `tasks/` — go-task definitions (`Taskfile.yml` → `env`, `pipeline`).
+- `data/`, `models/` — gitignored outputs and downloaded checkpoints.

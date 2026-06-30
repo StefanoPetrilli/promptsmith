@@ -1,29 +1,13 @@
 #!/usr/bin/env python3
-"""Step 5 — render copies of the images with the segmentation overlaid + boxes drawn.
+"""Step 4 — overlay SAM 3 segmentation + boxes on the generated images.
 
-This is a pure post-processing step: it consumes the outputs of steps 2 & 3 (images, the
-`labels.jsonl` audit log with `boxes_xyxy` + `scores`, and the per-image instance-mask PNGs
-written by step 3 under `masks/`) and produces, per image, a copy with:
-
-  * the SAM 3 instance segmentation **overlaid** as semi-transparent colored regions;
-  * the **bounding boxes** drawn on top, with the confidence score annotated.
-
-No model is loaded — nothing leaves the CPU — so this is cheap to run on the whole set.
-
-Which boxes are drawn? By default the same boxes that were written to the YOLO `.txt`
-labels (i.e. SAM 3's `pred_boxes`, the actual training targets), so the visualization shows
-exactly what the detector will learn. Pass `--boxes-from masks` to instead draw the tight
-axis-aligned bbox computed from each segmentation mask's pixels (a literal
-"box-based-on-the-segmentation" view), which is useful for spotting over/under-segmentation.
-
-Outputs: `<out>/img_XXXX.png` (RGB) for every image that has a labels.jsonl entry, plus a
-`visuals.jsonl` index.
-
-Test mode: `--limit 3` renders just the first 3 images.
+CPU-only post-processing over step 3's `labels.jsonl` (+ `masks/<stem>.png`): per image,
+draws the segmentation as semi-transparent regions and the boxes with confidence labels.
+`--boxes-from masks` draws tight bbox-of-mask instead of the YOLO targets. `--limit N`
+renders only the first N images.
 
 Usage:
   python pipeline/visualize_labels.py --labels data/labels/labels.jsonl --out data/visuals
-  python pipeline/visualize_labels.py --labels data/labels_test/labels.jsonl --out data/visuals_test --limit 3
 """
 from __future__ import annotations
 
@@ -41,7 +25,7 @@ log = logging.getLogger("visualize")
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Overlay SAM 3 segmentation + boxes (step 5).")
+    p = argparse.ArgumentParser(description="Overlay SAM 3 segmentation + boxes (step 4).")
     p.add_argument("--labels", required=True,
                    help="labels.jsonl produced by step 3 (one entry per image)")
     p.add_argument("--out", required=True, help="output dir for overlaid PNG copies")

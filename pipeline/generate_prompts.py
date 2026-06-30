@@ -1,29 +1,9 @@
 #!/usr/bin/env python3
-"""Step 1 — iteratively build a list of synthetic-image prompts for **wrenches**.
+"""Step 1 — build prompts for synthetic photos of *exactly one wrench*.
 
-The dataset direction changed: instead of house-number digits we now train a YOLO
-detector for a single object class — **wrenches**. Each prompt therefore describes a
-photograph that contains **exactly one wrench**, varied along four primary axes:
-
-  * environment   — where the photo is taken (garage workbench, mechanic's shop, ...)
-  * wrench type   — combination / adjustable / socket / torque / pipe / box / ratcheting
-  * device        — phone camera / DSLR / dashcam / security cam / drone / film / ...
-  * perspective   — eye-level / low angle / bird's-eye / worm's-eye / side / ...
-
-plus secondary attributes (surface, arrangement, finish/condition) so a strong, varied
-synthetic set is produced without manual authoring. Each prompt is kept short and
-direct; each mentions exactly one wrench and ends with "sharp focus on the wrench".
-
-Outputs:
-  <out>/prompts.jsonl   — one JSON object per prompt (text + the axes used), for auditing
-  <out>/prompts.txt     — one prompt per line, fed to the image generator (step 2)
-
-Test mode: `--test` writes a 12-prompt file set to <out>/prompts_test.{jsonl,txt} and
-prints them so you can eyeball variety without running 1000.
-
-Usage:
-  python pipeline/generate_prompts.py --n 1000 --out data
-  python pipeline/generate_prompts.py --test            # 12 prompts, prints to stdout
+Varies four axes (environment, wrench type, device, perspective) plus surface / finish /
+arrangement. Writes `<out>/prompts.{jsonl,txt}` (txt = one prompt per line, fed to step 2).
+`--test` writes 12 prompts to `prompts_test.*` and prints them.
 """
 from __future__ import annotations
 
@@ -203,11 +183,6 @@ def main() -> int:
     prompts = generate(n, args.seed)
     jsonl, txt = write(prompts, Path(args.out), stem)
     print(f"wrote {len(prompts)} prompts -> {jsonl}, {txt}")
-
-    for axis in ("environment", "wrench_type", "device", "perspective"):
-        uniq = len({p[axis] for p in prompts})
-        print(f"  {axis:13s}: {uniq} unique values")
-    print(f"  wrenches/image: 1 (always)")
 
     if args.test:
         print("\n--- prompts ---")

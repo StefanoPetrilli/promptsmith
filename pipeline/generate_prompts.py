@@ -3,7 +3,6 @@
 
 Varies four axes (environment, wrench type, device, perspective) plus surface / finish /
 arrangement. Writes `<out>/prompts.{jsonl,txt}` (txt = one prompt per line, fed to step 2).
-`--test` writes 12 prompts to `prompts_test.*` and prints them.
 """
 from __future__ import annotations
 
@@ -175,19 +174,11 @@ def main() -> int:
     ap.add_argument("--n", type=int, default=1000, help="number of prompts to generate")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", default="data", help="output directory")
-    ap.add_argument("--test", action="store_true", help="test mode: 12 prompts, print to stdout")
     args = ap.parse_args()
 
-    n = 12 if args.test else args.n
-    stem = "prompts_test" if args.test else "prompts"
-    prompts = generate(n, args.seed)
-    jsonl, txt = write(prompts, Path(args.out), stem)
+    prompts = generate(args.n, args.seed)
+    jsonl, txt = write(prompts, Path(args.out), "prompts")
     print(f"wrote {len(prompts)} prompts -> {jsonl}, {txt}")
-
-    if args.test:
-        print("\n--- prompts ---")
-        for p in prompts:
-            print(f"  {p['text']}")
     return 0
 
 

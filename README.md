@@ -9,7 +9,7 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 | # | Task | What it does |
 |---|------|--------------|
 | 1 | `pipeline:generate` (`--test`) | Write N varied *"one wrench"* prompts → `data/prompts.{jsonl,txt}` |
-| 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (NF4, Qwen3 embeds on CPU) → `data/images/` |
+| 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (fp16 + partial GPU pinning; Qwen3 embeds precomputed + cached) → `data/images/` |
 | 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` |
 | 4 | `pipeline:visualize` (`visualize-test`) | Overlay SAM 3 segmentation + boxes on the images → `data/visuals/` |
 | 5 | `pipeline:train` (`train-test`) | Assemble train/val split + fine-tune **YOLOv8n** → `data/dataset/runs/` |
@@ -17,7 +17,7 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 Each `*-test` variant runs on a handful of images for a quick smoke check.
 
 ## Requirements
-- Python 3.10+, NVIDIA GPU (~6 GB VRAM). FLUX.2 Qwen3 encoder runs on CPU; SAM 3 + VAE + NF4 transformer on GPU.
+- Python 3.10+, NVIDIA GPU (~6 GB VRAM) + ~8 GB free RAM. The FLUX.2-klein-4B transformer + VAE run fp16 (lossless) via partial GPU pinning (most blocks on GPU, rest offloaded per-block); Qwen3 text embeddings are precomputed + cached to disk, then released. SAM 3 runs on GPU.
 - [go-task](https://taskfile.dev) 3.x.
 
 ## Quickstart

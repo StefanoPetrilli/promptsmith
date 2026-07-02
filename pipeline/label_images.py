@@ -50,10 +50,16 @@ def collect_images(arg: str, limit: int) -> list[Path]:
     src = Path(arg)
     if src.is_file() and src.suffix == ".jsonl":
         imgs = []
+        seen = set()
         for line in src.read_text().splitlines():
-            if line.strip():
-                d = json.loads(line)
-                imgs.append(Path(d["image"]))
+            if not line.strip():
+                continue
+            d = json.loads(line)
+            pth = Path(d["image"])
+            if pth in seen:
+                continue  # skip duplicate manifest entries
+            seen.add(pth)
+            imgs.append(pth)
         return imgs[:limit] if limit > 0 else imgs
     if src.is_dir():
         imgs = sorted(p for p in src.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg"))

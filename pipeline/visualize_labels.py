@@ -159,9 +159,16 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     entries = []
+    seen = set()
     for line in Path(a.labels).read_text().splitlines():
-        if line.strip():
-            entries.append(json.loads(line))
+        if not line.strip():
+            continue
+        d = json.loads(line)
+        img = d.get("image")
+        if img in seen:
+            continue  # skip duplicate label entries
+        seen.add(img)
+        entries.append(d)
     if a.limit > 0:
         entries = entries[:a.limit]
     if not entries:

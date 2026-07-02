@@ -16,8 +16,13 @@ before the transformer loads (the two never coexist on the GPU). Loaded in **bfl
 checkpoint's native dtype (`text_encoder/config.json` -> `"dtype": "bfloat16"`), to avoid
 from_pretrained casting bf16->fp16 — that cast temporarily holds BOTH the mmap'd bf16 pages and
 the new fp16 copy (~2x peak). Final embeddings are cast to `--dtype` in _embed_one, so loading in
-bf16 does not change the cached output. Hybrid GPU+CPU fp16 (lossless): ~4 GB on GPU, ~4 GB on
-CPU.
+bf16 does not change the cached output. Placement: loaded on CPU then `embed_tokens` + `rotary_emb`
++ `norm` + as many of the 36 decoder layers as fit are pinned on cuda, the rest offloaded
+per-forward (move to cuda, compute, move back). This maximizes GPU residency on a 6 GB card —
+`device_map="balanced"` + `max_memory` is only a soft budget that Qwen3's tied lm_head/embed_tokens
+weights blow past -> OOM, and one-layer-at-a-time sequential offload is far slower. The inner
+`Qwen3Model` is called directly (skipping `lm_head` and its ~155 MB logits tensor) since only
+`hidden_states` are needed. Later runs hit the memmap cache and never reload Qwen3.
 
 Two offload policies (`--pin-policy`):
   * `partial` (default): pin the VAE + all small transformer modules + all double-stream
@@ -66,7 +71,7 @@ import torch
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s :: %(message)s")
 log = logging.getLogger("flux2")
 
-EMBED_MEMMAP_SUFFIX = ".embeds.npy"  # numpy memmap, shape (N, L, D), raw bit-pattern
+EMBED_MEMMAP_SUFFIX = ".embeds.npy"
 
 
 def parse_args() -> argparse.Namespace:
@@ -141,50 +146,152 @@ def _row_to_torch(np_row, dtype: torch.dtype) -> torch.Tensor:
     return t
 
 
+def _module_size_bytes(m: torch.nn.Module) -> int:
+    return sum(p.numel() * p.element_size() for p in m.parameters())
+
+
+def _pin_qwen3_layers(te, vram_margin_gb: float = 0.60):
+    """Pin embed_tokens + rotary_emb + norm + as many decoder layers as fit on cuda; offload the
+    rest per-forward (move to cuda in pre-hook, back to cpu in post-hook). Returns (n_pinned, n_offloaded).
+
+    The hidden_states tensor is created on cuda by embed_tokens and stays on cuda throughout, so
+    offloaded layers compute on cuda and only their own weights shuttle across PCIe. Lossless:
+    identical bf16 weights, just placed.
+
+    Pinning is **dynamic**: each layer is moved to cuda one at a time and the *actual* free VRAM
+    is measured after each (via `mem_get_info`), stopping when free drops below the margin + one
+    layer's worth. This is robust to `_module_size_bytes` undercounting (it misses, e.g., the tied
+    lm_head weight, CUDA context overhead, and the 37 captured hidden-state buffers ~96 MB) — a
+    precomputed `free // layer_bytes` budget would over-pin and OOM on the first offloaded layer.
+    """
+    cuda = torch.device("cuda")
+    cpu = torch.device("cpu")
+    inner = te.model  # Qwen3Model
+
+    # Pin small modules first (embed_tokens ~778 MB, rotary/norm tiny).
+    inner.embed_tokens.to(cuda)
+    inner.rotary_emb.to(cuda)
+    inner.norm.to(cuda)
+    torch.cuda.empty_cache()
+
+    layers = inner.layers
+    layer_bytes = _module_size_bytes(layers[0])
+    # Stop when free VRAM < margin + one offloaded layer (so an offloaded layer can still load in).
+    threshold_b = vram_margin_gb * 1e9 + layer_bytes
+
+    n_pin = 0
+    for blk in layers:
+        free_b, _ = torch.cuda.mem_get_info(cuda)
+        if free_b < threshold_b:
+            break
+        blk.to(cuda)
+        torch.cuda.empty_cache()
+        n_pin += 1
+
+    n_off = len(layers) - n_pin
+    free_b, _ = torch.cuda.mem_get_info(cuda)
+    offloaded = list(layers[n_pin:])
+
+    for blk in offloaded:
+        def _pre(module, _args, _cuda=cuda):
+            module.to(_cuda)
+            return None
+
+        def _post(module, _args, output, _cpu=cpu):
+            module.to(_cpu)
+            return output
+
+        blk.register_forward_pre_hook(_pre)
+        blk.register_forward_hook(_post)
+
+    torch.cuda.empty_cache()
+    log.info(
+        "qwen3-pin: layer=%.0f MB, margin=%.2f GB, stop-threshold=%.2f GB free -> pinned %d/%d decoder layers "
+        "(+ embed_tokens/rotary/norm); offloading %d (~%.0f MB PCIe/layer each). VRAM free now %.2f GB.",
+        layer_bytes / 1e6, vram_margin_gb, threshold_b / 1e9, n_pin, len(layers), n_off,
+        layer_bytes / 1e6, free_b / 1e9,
+    )
+    return n_pin, n_off
+
+
 def precompute_prompt_embeds(
     model_id: str, prompts: list[str], dtype: torch.dtype, cache_path: Path, tokenizer,
 ):
-    """Load Qwen3 (bfloat16, native ckpt dtype), stream FLUX.2 prompt embeddings row-by-row into
-    a memmap file, then release Qwen3. Only one embedding (~6 MB) + Qwen3 are resident at a time;
+    """Load Qwen3 (bfloat16, native ckpt dtype), pin as many of its 36 decoder layers on the GPU
+    as fit and offload the rest per-forward, stream FLUX.2 prompt embeddings row-by-row into a
+    memmap file, then release Qwen3. Only one embedding (~6 MB) + Qwen3 are resident at a time;
     the full embedding set is never held in RAM.
 
-    Hybrid GPU+CPU bf16 (~8 GB TE): ~4 GB on GPU, ~4 GB on CPU. Lossless. If no CUDA is available,
-    loads fully on CPU. Final embeddings are cast to `dtype` in _embed_one, so loading the model in
-    bf16 does not change the cached output (same rounding happens, just once at the end instead of
-    during from_pretrained).
+    Placement: the ~8 GB TE doesn't fit a 6 GB GPU fully, and `device_map="balanced"` +
+    `max_memory` is only a *soft* budget that Qwen3's tied lm_head/embed_tokens weights blow past
+    -> OOM. Instead we load on CPU and manually pin `embed_tokens` + `rotary_emb` + `norm` + as
+    many decoder layers as fit (leaving room for one offloaded layer + activations), then hook each
+    remaining layer to move to cuda right before its forward and back to cpu after. This maximizes
+    GPU residency (~23 of 36 layers on a 5.6 GiB card) — far faster than one-layer-at-a-time
+    sequential offload or a full-CPU forward. Lossless (identical bf16 weights).
+
+    We call the inner `te.model` (Qwen3Model) directly, NOT `te` (Qwen3ForCausalLM): we only need
+    three intermediate layer outputs, so we skip `lm_head`'s matmul and its 512x151936 logits
+    tensor (~155 MB) — saving VRAM and time. lm_head is tied to embed_tokens anyway
+    (`tie_word_embeddings: True`), so it adds no weights. We capture only layers (9, 18, 27) via
+    per-layer forward hooks instead of `output_hidden_states=True` (which retains all 37
+    hidden-state buffers on cuda ~96 MB). Final embeddings are cast to `dtype` in _embed_one, so
+    loading in bf16 does not change the cached output.
     """
-    from diffusers import Flux2KleinPipeline
     from transformers import Qwen3ForCausalLM
 
-    if torch.cuda.is_available():
-        log.info("Loading Qwen3 text encoder hybrid GPU+CPU (bfloat16, ~8 GB, native ckpt dtype — no cast peak)...")
-        te = Qwen3ForCausalLM.from_pretrained(
-            model_id, subfolder="text_encoder", torch_dtype=torch.bfloat16,
-            low_cpu_mem_usage=True,
-            device_map="balanced",
-            max_memory={0: "4GiB", "cpu": "8GiB"},
-        ).eval()
-        enc_device = torch.device("cuda")
-    else:
-        log.info("Loading Qwen3 text encoder on CPU (bfloat16)...")
-        te = Qwen3ForCausalLM.from_pretrained(
-            model_id, subfolder="text_encoder", torch_dtype=torch.bfloat16, low_cpu_mem_usage=True
-        ).to("cpu").eval()
-        enc_device = torch.device("cpu")
-    log.info("Qwen3 loaded. Streaming embeddings for %d prompts -> %s ...", len(prompts), cache_path.name)
+    log.info("Loading Qwen3 text encoder (bfloat16, ~8 GB) on CPU, then pinning max layers to GPU...")
+    te = Qwen3ForCausalLM.from_pretrained(
+        model_id, subfolder="text_encoder", torch_dtype=torch.bfloat16, low_cpu_mem_usage=True,
+    ).to("cpu").eval()
+    enc_device = torch.device("cuda")
+    n_pin, n_off = _pin_qwen3_layers(te, vram_margin_gb=0.60)
+    log.info(
+        "Qwen3 placed: pinned %d/%d decoder layers + embed_tokens/norm/rotary on cuda, offloading %d. "
+        "Streaming embeddings for %d prompts -> %s ...",
+        n_pin, len(te.model.layers), n_off, len(prompts), cache_path.name,
+    )
 
     store_np = _np_store_dtype(dtype)
+    hidden_states_layers = (9, 18, 27)
+
+    # Capture ONLY the 3 layer outputs we need via per-layer forward hooks, instead of
+    # `output_hidden_states=True` (which uses `@capture_outputs` and retains all 37 hidden-state
+    # buffers on cuda ~96 MB + overhead). The decoder layer returns a single `hidden_states`
+    # tensor, so the hook receives it directly as `output`.
+    _captured: dict[int, torch.Tensor] = {}
+    _hooks = []
+    for k in hidden_states_layers:
+        def _make_hook(idx):
+            def _hook(_module, _args, output, _idx=idx):
+                _captured[_idx] = output
+                return output
+            return _hook
+        _hooks.append(te.model.layers[k].register_forward_hook(_make_hook(k)))
 
     def _embed_one(prompt: str) -> torch.Tensor:
-        e = Flux2KleinPipeline._get_qwen3_prompt_embeds(
-            text_encoder=te,
-            tokenizer=tokenizer,
-            prompt=prompt,
-            device=enc_device,
-            dtype=dtype,
-            max_sequence_length=512,
-            hidden_states_layers=(9, 18, 27),
-        )  # (1, L, D)
+        # Replicate Flux2KleinPipeline._get_qwen3_prompt_embeds but call the inner Qwen3Model
+        # directly (skip lm_head) and use the 3 per-layer hooks above. Returns (L, D) on cpu in `dtype`.
+        messages = [{"role": "user", "content": prompt}]
+        text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False,
+        )
+        inputs = tokenizer(
+            text, return_tensors="pt", padding="max_length", truncation=True, max_length=512,
+        )
+        input_ids = inputs["input_ids"].to(enc_device)
+        attention_mask = inputs["attention_mask"].to(enc_device)
+        _captured.clear()
+        with torch.no_grad():
+            te.model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                use_cache=False,
+            )
+        stacked = torch.stack([_captured[k] for k in hidden_states_layers], dim=1)  # (1, 3, L, H)
+        stacked = stacked.to(dtype=dtype, device=enc_device)
+        b, c, l, h = stacked.shape
+        e = stacked.permute(0, 2, 1, 3).reshape(b, l, c * h)  # (1, L, 3H)
         return e[0].detach().to("cpu", dtype=dtype)  # (L, D)
 
     # Compute the first prompt to learn (L, D), then create the memmap file, then stream the rest.
@@ -202,6 +309,10 @@ def precompute_prompt_embeds(
             mm.flush()
     mm.flush()
     del mm
+
+    for h in _hooks:
+        h.remove()
+    del _hooks, _captured
 
     log.info("Releasing Qwen3 from RAM...")
     del te

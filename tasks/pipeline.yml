@@ -4,63 +4,159 @@ version: "3"
 # Each step has a `*-test` task that runs on a handful of images for verification.
 # The test variants write to the SAME folders as the normal tasks (no `_test` dirs).
 #
-#   prompts:generate        step 1 — 1000 varied wrench prompts -> data/prompts.{jsonl,txt}
-#   images:generate         step 2 — FLUX.2-klein-4B render all prompts -> data/images/
-#   images:test             step 2 — render first 3 prompts -> data/images/
-#   label:run               step 3 — SAM 3 text-grounded wrench boxes -> data/labels/
-#   label:test              step 3 — label first 3 images -> data/labels/
-#   visualize:run           step 4 — overlay SAM 3 masks + boxes -> data/visuals/
-#   visualize:test          step 4 — overlay first 3 images -> data/visuals/
-#   train:run               step 5 — assemble dataset + fine-tune YOLO -> data/dataset/
-#   train:test              step 5 — 1-epoch smoke -> data/dataset/
+#   generate              step 1 — weighted-axis prompts -> data/prompts/<mode>[/<count>]/
+#   generate-test         step 1 — 3 prompts per leaf
+#   images                step 2 — FLUX.2-klein-4B render every leaf -> data/images/
+#   images-test           step 2 — render first 3 prompts per leaf
+#   label                 step 3 — SAM 3 text-grounded wrench boxes -> data/labels/
+#   label-test            step 3 — label first 3 images per leaf
+#   postprocess           step 3.5 — Albumentations degradation -> data/images_pp/
+#   postprocess-test      step 3.5 — degrade first 3 images per leaf
+#   visualize             step 4 — overlay SAM 3 masks + boxes -> data/visuals/
+#   visualize-test        step 4 — overlay first 3 images per leaf
+#   train                 step 5 — assemble dataset + fine-tune YOLO -> data/dataset/
+#   train-test            step 5 — 1-epoch smoke -> data/dataset/
 
 vars:
   PY: .venv/bin/python
   MODEL: black-forest-labs/FLUX.2-klein-4B
   SAM3_CKPT: models/sam3/sam3.pt
+  SIZE: "768"
+  STEPS: "8"
+  # --- prompt counts (tune the dataset size from here) -----------------------
+  # clean_positive
+  N_CLEAN_1: "600"
+  N_CLEAN_2: "90"
+  N_CLEAN_3: "30"
+  # hard_positive
+  N_HARD_1: "150"
+  N_HARD_2: "25"
+  # asset
+  N_ASSET_1: "100"
+  N_ASSET_2: "20"
+  # negatives
+  N_HARD_NEG: "200"
+  N_PURE_NEG: "150"
+  # test variants
+  N_TEST: "3"
 
 tasks:
   generate:
-    desc: "Step 1: generate 1000 varied prompts -> data/prompts.{jsonl,txt}"
+    desc: "Step 1: weighted-axis prompts -> data/prompts/<mode>[/<count>]/"
     cmds:
-      - "{{.PY}} pipeline/generate_prompts.py --n 1000 --out data"
+      # clean_positive — the bulk; mostly 1 wrench, some 2-3 clearly separated
+      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 1 --n {{.N_CLEAN_1}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 2 --n {{.N_CLEAN_2}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 3 --n {{.N_CLEAN_3}} --out data/prompts"
+      # hard_positive — small / distant / occluded / frame-edge (mostly 1)
+      - "{{.PY}} pipeline/generate_prompts.py --mode hard_positive --count 1 --n {{.N_HARD_1}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode hard_positive --count 2 --n {{.N_HARD_2}} --out data/prompts"
+      # asset — isolated product shots
+      - "{{.PY}} pipeline/generate_prompts.py --mode asset --count 1 --n {{.N_ASSET_1}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode asset --count 2 --n {{.N_ASSET_2}} --out data/prompts"
+      # negatives — count-less
+      - "{{.PY}} pipeline/generate_prompts.py --mode hard_negative --n {{.N_HARD_NEG}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode pure_negative --n {{.N_PURE_NEG}} --out data/prompts"
+
+  generate-test:
+    desc: "Step 1 (test): {{.N_TEST}} prompts per (mode,count) leaf"
+    cmds:
+      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 1 --n {{.N_TEST}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 2 --n {{.N_TEST}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode hard_positive  --count 1 --n {{.N_TEST}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode hard_negative --n {{.N_TEST}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode pure_negative --n {{.N_TEST}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode asset --count 1 --n {{.N_TEST}} --out data/prompts"
 
   images:
-    desc: "Step 2: render all prompts with FLUX.2-klein-4B -> data/images/"
+    desc: "Step 2: render every leaf prompt folder with FLUX.2-klein-4B -> data/images/"
     cmds:
-      - "{{.PY}} pipeline/generate_images.py --model {{.MODEL}} --prompts data/prompts.txt --out data/images --size 768 --steps 8"
+      - >-
+        {{.PY}} pipeline/run_leaves.py
+        --root data/prompts --marker prompts.txt
+        --out-root data/images --input-arg prompts
+        --script pipeline/generate_images.py
+        -- --model {{.MODEL}} --size {{.SIZE}} --steps {{.STEPS}}
 
   images-test:
-    desc: "Step 2 (test): render first 3 prompts (fp16 + sequential CPU offload) -> data/images/"
+    desc: "Step 2 (test): render first 3 prompts per leaf -> data/images/"
     cmds:
-      - "{{.PY}} pipeline/generate_images.py --model {{.MODEL}} --prompts data/prompts.txt --out data/images --size 768 --steps 8 --limit 3"
+      - >-
+        {{.PY}} pipeline/run_leaves.py
+        --root data/prompts --marker prompts.txt
+        --out-root data/images --input-arg prompts
+        --script pipeline/generate_images.py
+        -- --model {{.MODEL}} --size {{.SIZE}} --steps {{.STEPS}} --limit 3
 
   label:
-    desc: "Step 3: label all images with SAM 3 (text prompt 'wrench', conf>=0.55) -> data/labels/"
+    desc: "Step 3: label each leaf with SAM 3 (text 'wrench', conf>=0.55) -> data/labels/"
     cmds:
-      - "{{.PY}} pipeline/label_images.py --images data/images/manifest.jsonl --out data/labels --model-path {{.SAM3_CKPT}} --confidence 0.55"
+      - >-
+        {{.PY}} pipeline/run_leaves.py
+        --root data/images --marker manifest.jsonl
+        --out-root data/labels --input-arg images
+        --script pipeline/label_images.py
+        -- --model-path {{.SAM3_CKPT}} --confidence 0.55
 
   label-test:
-    desc: "Step 3 (test): label first 3 images with SAM 3 (conf>=0.55) -> data/labels/"
+    desc: "Step 3 (test): label first 3 images per leaf -> data/labels/"
     cmds:
-      - "{{.PY}} pipeline/label_images.py --images data/images/manifest.jsonl --out data/labels --limit 3 --model-path {{.SAM3_CKPT}} --confidence 0.55"
+      - >-
+        {{.PY}} pipeline/run_leaves.py
+        --root data/images --marker manifest.jsonl
+        --out-root data/labels --input-arg images
+        --script pipeline/label_images.py
+        -- --model-path {{.SAM3_CKPT}} --confidence 0.55 --limit 3
+
+  postprocess:
+    desc: "Step 3.5: deterministic Albumentations degradation -> data/images_pp/"
+    cmds:
+      - >-
+        {{.PY}} pipeline/run_leaves.py
+        --root data/images --marker manifest.jsonl
+        --out-root data/images_pp --input-arg images
+        --script pipeline/postprocess_images.py
+        --
+
+  postprocess-test:
+    desc: "Step 3.5 (test): degrade first 3 images per leaf -> data/images_pp/"
+    cmds:
+      - >-
+        {{.PY}} pipeline/run_leaves.py
+        --root data/images --marker manifest.jsonl
+        --out-root data/images_pp --input-arg images
+        --script pipeline/postprocess_images.py
+        -- --limit 3
 
   visualize:
     desc: "Step 4: overlay SAM 3 segmentation + boxes on all images -> data/visuals/"
     cmds:
-      - "{{.PY}} pipeline/visualize_labels.py --labels data/labels/labels.jsonl --out data/visuals"
+      - >-
+        {{.PY}} pipeline/run_leaves.py
+        --root data/labels --marker labels.jsonl
+        --out-root data/visuals --input-arg labels
+        --script pipeline/visualize_labels.py
+        --
 
   visualize-test:
-    desc: "Step 4 (test): overlay first 3 images -> data/visuals/"
+    desc: "Step 4 (test): overlay first 3 images per leaf -> data/visuals/"
     cmds:
-      - "{{.PY}} pipeline/visualize_labels.py --labels data/labels/labels.jsonl --out data/visuals --limit 3"
+      - >-
+        {{.PY}} pipeline/run_leaves.py
+        --root data/labels --marker labels.jsonl
+        --out-root data/visuals --input-arg labels
+        --script pipeline/visualize_labels.py
+        -- --limit 3
 
   train:
-    desc: "Step 5: assemble single-class YOLO dataset + fine-tune -> data/dataset/"
+    desc: "Step 5: assemble single-class YOLO dataset (from data/images_pp/) + fine-tune"
     cmds:
-      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels --out data/dataset --base models/yolov8n.pt --epochs 50 --imgsz 640 --batch 16"
+      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
+        --out data/dataset --base models/yolov8n.pt --epochs 50 --imgsz 640 --batch 16"
 
   train-test:
     desc: "Step 5 (test): 1-epoch smoke -> data/dataset/"
     cmds:
-      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels --out data/dataset --base models/yolov8n.pt --epochs 1 --imgsz 320 --batch 1 --allow-dummy-labels"
+      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
+        --out data/dataset --base models/yolov8n.pt --epochs 1 --imgsz 320 --batch 1 \
+        --allow-dummy-labels"

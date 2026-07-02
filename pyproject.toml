@@ -26,6 +26,8 @@ dependencies = [
   "sam3>=0.1.1",
   "iopath>=0.1.10",
   "huggingface_hub>=0.20",
+  "albumentations>=2.0",
+  "opencv-python-headless>=4.8",
 ]
 
 [project.optional-dependencies]

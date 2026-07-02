@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s :: %(m
 log = logging.getLogger("label")
 
 DEFAULT_MODEL_PATH = "models/sam3/sam3.pt"
-CLASS_ID = 0  # single class: wrench
+CLASS_ID = 0
 CLASS_NAME = "wrench"
 
 

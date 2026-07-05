@@ -10,8 +10,8 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 |---|------|--------------|
 | 1 | `pipeline:generate` (`--test`) | Write N varied wrench prompts → `data/prompts/<mode>/prompts.{jsonl,txt}` |
 | 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (fp16 + partial GPU pinning; Qwen3 embeds precomputed + cached) → `data/images/` |
-| 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` |
-| 4 | `pipeline:visualize` (`visualize-test`) | Overlay SAM 3 segmentation + boxes on the images → `data/visuals/` |
+| 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` + mask PNGs |
+| 4 | `pipeline:visualize` (`visualize-test`) | Overlay segmentation + boxes on the images → `data/visuals/` |
 | 5 | `pipeline:train` (`train-test`) | Assemble train/val split + fine-tune **YOLOv8n** → `data/dataset/runs/` |
 |   | `pipeline:download-openimages` | Download real **Open Images** wrench images for validation → `data/openimages_val/` |
 |   | `pipeline:train-real-val` | Train on synthetic images, validate on real Open Images |
@@ -40,9 +40,7 @@ task pipeline:images-test
 task pipeline:label-test
 task pipeline:train-test
 task pipeline:visualize-test
-
 ```
-
 
 ## Real-world validation with Open Images
 

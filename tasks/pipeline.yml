@@ -150,8 +150,10 @@ tasks:
   visualize-openimages:
     desc: "Overlay YOLO boxes on Open Images validation set -> data/openimages_val/visuals/"
     cmds:
-      - "{{.PY}} pipeline/visualize_openimages.py --images data/openimages_val/images \
-        --labels data/openimages_val/labels --out data/openimages_val/visuals"
+      - "{{.PY}} pipeline/visualize_labels.py --format yolo \
+        --images data/openimages_val/images \
+        --labels data/openimages_val/labels \
+        --out data/openimages_val/visuals"
 
   train:
     desc: "Step 5: assemble single-class YOLO dataset (from data/images_pp/) + fine-tune"

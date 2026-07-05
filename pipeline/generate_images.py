@@ -41,11 +41,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="fp16")
     p.add_argument("--limit", type=int, default=0)
-    p.add_argument(
-        "--pin-policy", choices=["partial", "sequential"], default="partial",
-    )
     p.add_argument("--vram-margin", type=float, default=1.2)
-    p.add_argument("--restart", action="store_true")
     p.add_argument("--prefix", default="")
     return p.parse_args()
 
@@ -66,10 +62,6 @@ def embed_cache_key(model: str, prompts: list[str]) -> str:
 
 def embed_cache_path(out: str, model: str, prompts: list[str]) -> Path:
     return Path(out) / f"_embeds_{embed_cache_key(model, prompts)}{EMBED_MEMMAP_SUFFIX}"
-
-
-def embed_legacy_cache_path(out: str, model: str, prompts: list[str]) -> Path:
-    return Path(out) / f"_embeds_{embed_cache_key(model, prompts)}.pt"
 
 
 def torch_dtype(name: str) -> torch.dtype:
@@ -104,7 +96,7 @@ def free_vram_gb(device: torch.device) -> float:
     return free_b / 1e9
 
 
-def _offload_hooks(module: torch.nn.Module, cuda: torch.device, cpu: torch.device):
+def offload_hooks(module: torch.nn.Module, cuda: torch.device, cpu: torch.device):
     def pre(m, _args):
         m.to(cuda)
 
@@ -112,13 +104,13 @@ def _offload_hooks(module: torch.nn.Module, cuda: torch.device, cpu: torch.devic
         m.to(cpu)
         return output
 
-    return module.register_forward_pre_hook(pre), module.register_forward_hook(post)
+    module.register_forward_pre_hook(pre)
+    module.register_forward_hook(post)
 
 
 def pin_layers(layers: list[torch.nn.Module], margin_gb: float) -> tuple[int, int]:
     """Pin as many layers on GPU as fit; offload the rest via hooks."""
     cuda = torch.device("cuda")
-    cpu = torch.device("cpu")
     layer_mb = module_size_mb(layers[0])
     threshold_b = margin_gb * 1e9 + layer_mb * 1e6
 
@@ -131,12 +123,12 @@ def pin_layers(layers: list[torch.nn.Module], margin_gb: float) -> tuple[int, in
         n_pin += 1
 
     for layer in layers[n_pin:]:
-        _offload_hooks(layer, cuda, cpu)
+        offload_hooks(layer, cuda, torch.device("cpu"))
 
     return n_pin, len(layers) - n_pin
 
 
-def _capture_hooks(layers: list[torch.nn.Module], target_indices: tuple[int, ...]):
+def capture_hooks(layers: list[torch.nn.Module], target_indices: tuple[int, ...]):
     captured: dict[int, torch.Tensor] = {}
 
     def make_hook(idx: int):
@@ -167,8 +159,7 @@ def precompute_prompt_embeds(
     log.info("Qwen3 pinned %d/%d decoder layers; offloading %d.", n_pin, len(inner.layers), n_off)
 
     target_layers = (9, 18, 27)
-    captured, handles = _capture_hooks(list(inner.layers), target_layers)
-
+    captured, handles = capture_hooks(list(inner.layers), target_layers)
     store_np = np_store_dtype(dtype)
 
     def embed_one(prompt: str) -> torch.Tensor:
@@ -218,21 +209,6 @@ def memmap_is_valid(mm: np.ndarray, chunk: int = 64) -> bool:
     return True
 
 
-def convert_legacy_cache(legacy: Path, cache: Path, dtype: torch.dtype):
-    log.info("Converting legacy .pt cache %s -> %s", legacy.name, cache.name)
-    data = torch.load(legacy, map_location="cpu", mmap=True, weights_only=False)
-    embeds = data["embeds"]
-    first = embeds[0]
-    L, D = first.shape[1], first.shape[2]
-    store_np = np_store_dtype(dtype)
-    mm = np.lib.format.open_memmap(cache, mode="w+", dtype=store_np, shape=(len(embeds), L, D))
-    for i, e in enumerate(tqdm(embeds, desc="convert embeds", unit="row")):
-        mm[i] = tensor_to_nprow(e[0].to(dtype), dtype)
-    mm.flush()
-    del mm, data, embeds
-    gc.collect()
-
-
 def load_or_compute_embeds(model_id: str, out: str, prompts: list[str], dtype: torch.dtype):
     from transformers import AutoTokenizer
 
@@ -248,12 +224,6 @@ def load_or_compute_embeds(model_id: str, out: str, prompts: list[str], dtype: t
         cache.unlink()
 
     cache.parent.mkdir(parents=True, exist_ok=True)
-
-    legacy = embed_legacy_cache_path(out, model_id, prompts)
-    if legacy.exists():
-        convert_legacy_cache(legacy, cache, dtype)
-        return np.lib.format.open_memmap(cache, mode="r"), tokenizer
-
     precompute_prompt_embeds(model_id, prompts, dtype, cache, tokenizer)
     return np.lib.format.open_memmap(cache, mode="r"), tokenizer
 
@@ -263,7 +233,6 @@ def apply_partial_pin(pipe, vram_margin_gb: float = 1.2):
     transformer = pipe.transformer
 
     pipe.vae.to(cuda)
-    pinned_mb = module_size_mb(pipe.vae)
 
     small_modules = [
         "pos_embed", "time_guidance_embed",
@@ -273,11 +242,9 @@ def apply_partial_pin(pipe, vram_margin_gb: float = 1.2):
     ]
     for name in small_modules:
         getattr(transformer, name).to(cuda)
-        pinned_mb += module_size_mb(getattr(transformer, name))
 
     for block in transformer.transformer_blocks:
         block.to(cuda)
-        pinned_mb += module_size_mb(block)
 
     single_blocks = transformer.single_transformer_blocks
     single_mb = module_size_mb(single_blocks[0]) if single_blocks else 0.0
@@ -294,15 +261,13 @@ def apply_partial_pin(pipe, vram_margin_gb: float = 1.2):
     for i, block in enumerate(single_blocks):
         if i < n_pin:
             block.to(cuda)
-            pinned_mb += module_size_mb(block)
         else:
-            _offload_hooks(block, cuda, torch.device("cpu"))
+            offload_hooks(block, cuda, torch.device("cpu"))
 
     torch.cuda.empty_cache()
-    return n_pin, len(single_blocks) - n_pin
 
 
-def build_pipeline(model_id: str, dtype: torch.dtype, tokenizer, pin_policy: str, vram_margin: float):
+def build_pipeline(model_id: str, dtype: torch.dtype, tokenizer, vram_margin: float):
     from diffusers import (
         AutoencoderKLFlux2,
         Flux2KleinPipeline,
@@ -339,13 +304,7 @@ def build_pipeline(model_id: str, dtype: torch.dtype, tokenizer, pin_policy: str
         transformer=transformer,
         is_distilled=True,
     )
-
-    if pin_policy == "partial":
-        apply_partial_pin(pipe, vram_margin_gb=vram_margin)
-    else:
-        log.info("Sequential offload enabled (slow).")
-        pipe.enable_sequential_cpu_offload(device=torch.device("cuda"))
-
+    apply_partial_pin(pipe, vram_margin_gb=vram_margin)
     torch.cuda.empty_cache()
     return pipe
 
@@ -390,7 +349,6 @@ def generate_one(
     pipe,
     embeds_mm: np.ndarray,
     dtype: torch.dtype,
-    prompt: str,
     i: int,
     seed: int,
     size: int,
@@ -433,7 +391,7 @@ def main() -> int:
         log.error("Embed cache has %d rows but %d prompts loaded", embeds_mm.shape[0], len(prompts))
         return 2
 
-    done = set() if a.restart else find_completed(out_dir, a.prefix, len(prompts))
+    done = find_completed(out_dir, a.prefix, len(prompts))
     manifest = out_dir / "manifest.jsonl"
     if done:
         backfill_manifest(out_dir, a.prefix, prompts, done, manifest)
@@ -442,13 +400,13 @@ def main() -> int:
             log.info("All images already generated.")
             return 0
 
-    pipe = build_pipeline(a.model, dtype, tokenizer, a.pin_policy, a.vram_margin)
+    pipe = build_pipeline(a.model, dtype, tokenizer, a.vram_margin)
 
     with manifest.open("a", encoding="utf-8") as mf:
         todo = [i for i in range(len(prompts)) if i not in done]
         for i in tqdm(todo, total=len(todo), desc="generate", unit="img"):
             img, dt = generate_one(
-                pipe, embeds_mm, dtype, prompts[i], i, a.seed, a.size, a.steps, a.guidance,
+                pipe, embeds_mm, dtype, i, a.seed, a.size, a.steps, a.guidance,
             )
             path = out_dir / image_name(a.prefix, i)
             img.save(path)

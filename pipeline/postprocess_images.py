@@ -22,7 +22,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out", required=True)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--limit", type=int, default=0)
-    p.add_argument("--restart", action="store_true")
     return p.parse_args()
 
 
@@ -123,7 +122,7 @@ def main() -> int:
     stems = [Path(e["image"]).stem for e in entries]
     manifest = out_dir / "manifest_pp.jsonl"
 
-    done = set() if a.restart else find_completed(out_dir, stems)
+    done = find_completed(out_dir, stems)
     if done:
         backfill_manifest(out_dir, entries, done, manifest)
         log.info("Resume: %d/%d outputs already present.", len(done), len(entries))

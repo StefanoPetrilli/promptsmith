@@ -30,7 +30,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--confidence", type=float, default=0.55)
     p.add_argument("--resolution", type=int, default=1008)
     p.add_argument("--device", default="cuda")
-    p.add_argument("--save-masks", action=argparse.BooleanOptionalAction, default=True)
     return p.parse_args()
 
 
@@ -98,7 +97,7 @@ def boxes_to_yolo(boxes_xyxy: torch.Tensor, w: int, h: int) -> list[str]:
     return lines
 
 
-def label_image(proc, img_path: Path, prompt: str, save_masks: bool, masks_dir: Path):
+def label_image(proc, img_path: Path, prompt: str, masks_dir: Path):
     img = Image.open(img_path).convert("RGB")
     w, h = img.size
     state = proc.set_image(img)
@@ -112,7 +111,7 @@ def label_image(proc, img_path: Path, prompt: str, save_masks: bool, masks_dir: 
     label_path = masks_dir.parent / (img_path.stem + ".txt")
     label_path.write_text("\n".join(yolo_lines) + ("\n" if yolo_lines else ""), encoding="utf-8")
 
-    mask_path = save_instance_masks(masks, masks_dir, img_path.stem) if save_masks else None
+    mask_path = save_instance_masks(masks, masks_dir, img_path.stem)
     return {
         "image": str(img_path),
         "label": str(label_path),
@@ -144,7 +143,7 @@ def main() -> int:
     with audit.open("w", encoding="utf-8") as af:
         for img_path in tqdm(images, desc="label", unit="img"):
             try:
-                record = label_image(proc, img_path, a.prompt, a.save_masks, masks_dir)
+                record = label_image(proc, img_path, a.prompt, masks_dir)
             except Exception as exc:
                 log.error("  failed: %s", exc)
                 af.write(json.dumps({"image": str(img_path), "error": str(exc)}) + "\n")

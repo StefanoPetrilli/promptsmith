@@ -1,35 +1,54 @@
 #!/usr/bin/env python3
-"""Step 4 — overlay SAM 3 segmentation + boxes on labelled images."""
+"""Step 4 — overlay boxes (and SAM masks, when available) on images.
+
+Supports two label formats:
+  sam  — a labels.jsonl file from step 3, with boxes, scores and instance masks.
+  yolo — a directory of YOLO .txt files paired with a directory of images.
+"""
 from __future__ import annotations
 
 import argparse
 import json
 import logging
+import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pipeline.utils import palette
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s :: %(message)s")
 log = logging.getLogger("visualize")
 
+IMG_SUFFIXES = (".png", ".jpg", ".jpeg")
+
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Overlay SAM 3 segmentation + boxes (step 4).")
-    p.add_argument("--labels", required=True)
+    p = argparse.ArgumentParser(description="Overlay boxes/masks on images (step 4).")
+    p.add_argument("--labels", required=True,
+                   help="labels.jsonl for --format sam, or labels directory for --format yolo")
+    p.add_argument("--images", default=None,
+                   help="image directory (required for --format yolo)")
     p.add_argument("--out", required=True)
+    p.add_argument("--format", choices=["sam", "yolo"], default="sam")
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--alpha", type=int, default=110)
     p.add_argument("--box-width", type=int, default=3)
-    p.add_argument("--boxes-from", choices=["labels", "masks"], default="labels")
-    p.add_argument("--min-confidence", type=float, default=0.55)
-    p.add_argument("--masks-subdir", default="masks")
+    p.add_argument("--min-confidence", type=float, default=0.55,
+                   help="only applies to --format sam")
+    p.add_argument("--masks-subdir", default="masks",
+                   help="only applies to --format sam")
     return p.parse_args()
 
 
-def load_entries(path: Path, limit: int) -> list[dict]:
+# --- SAM format helpers ------------------------------------------------------
+
+
+def load_sam_entries(path: Path, limit: int) -> list[dict]:
     seen = set()
     entries = []
     for line in path.read_text().splitlines():
@@ -67,15 +86,42 @@ def filter_by_confidence(boxes_xyxy: list, scores: list, inst: np.ndarray | None
     return boxes, scores, inst
 
 
-def mask_boxes(inst: np.ndarray) -> list[tuple[int, int, int, int] | None]:
+# --- YOLO format helpers -----------------------------------------------------
+
+
+def collect_images(images_dir: Path, limit: int) -> list[Path]:
+    imgs = sorted(p for p in images_dir.iterdir() if p.suffix.lower() in IMG_SUFFIXES)
+    return imgs[:limit] if limit > 0 else imgs
+
+
+def load_yolo_boxes(label_path: Path, w: int, h: int) -> list[tuple[int, int, int, int]]:
     boxes = []
-    for i in range(1, int(inst.max()) + 1):
-        ys, xs = np.where(inst == i)
-        if xs.size == 0:
-            boxes.append(None)
-        else:
-            boxes.append((int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())))
+    if not label_path.exists():
+        return boxes
+    for line in label_path.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) != 5:
+            log.warning("skipping malformed line in %s: %s", label_path, line)
+            continue
+        try:
+            _, xc, yc, bw, bh = map(float, parts)
+        except ValueError:
+            log.warning("skipping non-numeric line in %s: %s", label_path, line)
+            continue
+        pw, ph = bw * w, bh * h
+        px, py = xc * w, yc * h
+        x1 = int(max(0, px - pw / 2))
+        y1 = int(max(0, py - ph / 2))
+        x2 = int(min(w, px + pw / 2))
+        y2 = int(min(h, py + ph / 2))
+        boxes.append((x1, y1, x2, y2))
     return boxes
+
+
+# --- drawing helpers ---------------------------------------------------------
 
 
 def build_overlay(inst: np.ndarray, alpha: int) -> Image.Image:
@@ -107,34 +153,38 @@ def draw_boxes(draw: ImageDraw.ImageDraw, boxes: list, scores: list, box_width: 
         c = cols[i % len(cols)]
         x1, y1, x2, y2 = box
         draw.rectangle([x1, y1, x2, y2], outline=c + (255,), width=box_width)
-        label = f"{float(score):.2f}"
+        label = f"{float(score):.2f}" if score is not None else f"{i + 1}"
         tw, th = text_size(draw, label, font)
         ty = max(0, y1 - 12)
         draw.rectangle([x1, ty, x1 + tw + 4, ty + th + 2], fill=c + (255,))
         draw.text((x1 + 2, ty), label, fill=(0, 0, 0, 255), font=font)
 
 
-def select_boxes(boxes_xyxy: list, scores: list, inst: np.ndarray | None, boxes_from: str):
-    if boxes_from == "masks" and inst is not None:
-        mboxes = mask_boxes(inst)
-        boxes = [b for b in mboxes if b is not None]
-        scores = [scores[i] for i, b in enumerate(mboxes) if b is not None]
-        return boxes, scores
-    return [tuple(b) for b in boxes_xyxy], scores
+# --- rendering ---------------------------------------------------------------
 
 
-def render(image_path: str, boxes_xyxy: list, scores: list, inst: np.ndarray | None,
-           alpha: int, box_width: int, boxes_from: str, min_conf: float) -> Image.Image:
+def render_sam(image_path: str, boxes_xyxy: list, scores: list, inst: np.ndarray | None,
+               alpha: int, box_width: int, min_conf: float) -> Image.Image:
     base = Image.open(image_path).convert("RGBA")
     boxes, scores, inst = filter_by_confidence(boxes_xyxy, scores, inst, min_conf)
 
     if inst is not None:
         base = Image.alpha_composite(base, build_overlay(inst, alpha))
 
-    boxes, scores = select_boxes(boxes, scores, inst, boxes_from)
     draw = ImageDraw.Draw(base)
-    draw_boxes(draw, boxes, scores, box_width)
+    draw_boxes(draw, [tuple(b) for b in boxes], scores, box_width)
     return base.convert("RGB")
+
+
+def render_yolo(image_path: Path, label_path: Path, box_width: int) -> Image.Image:
+    img = Image.open(image_path).convert("RGB")
+    boxes = load_yolo_boxes(label_path, *img.size)
+    draw = ImageDraw.Draw(img)
+    draw_boxes(draw, boxes, [None] * len(boxes), box_width)
+    return img
+
+
+# --- main --------------------------------------------------------------------
 
 
 def main() -> int:
@@ -142,44 +192,76 @@ def main() -> int:
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    entries = load_entries(Path(a.labels), a.limit)
-    if not entries:
-        log.error("No entries in %s", a.labels)
-        return 2
-
-    log.info("Rendering %d images (boxes-from=%s, min-confidence=%.2f)...",
-             len(entries), a.boxes_from, a.min_confidence)
-
     index = out_dir / "visuals.jsonl"
     n_ok = 0
-    with index.open("w", encoding="utf-8") as ix:
-        for i, e in enumerate(entries):
-            img_path = e["image"]
-            stem = Path(img_path).stem
-            log.info("[%d/%d] %s", i + 1, len(entries), Path(img_path).name)
-            try:
-                inst = load_instance_mask(e, a.masks_subdir)
-                n_in = len(e.get("boxes_xyxy", []))
-                img = render(img_path, e.get("boxes_xyxy", []), e.get("scores", []),
-                             inst, a.alpha, a.box_width, a.boxes_from, a.min_confidence)
-            except Exception as exc:
-                log.error("  failed: %s", exc)
-                continue
-            dst = out_dir / f"{stem}.png"
-            img.save(dst)
-            kept = len([s for s in e.get("scores", []) if float(s) >= a.min_confidence])
-            ix.write(json.dumps({
-                "image": img_path,
-                "visual": str(dst),
-                "n_boxes_in": n_in,
-                "n_boxes_kept": kept,
-                "min_confidence": a.min_confidence,
-                "boxes_from": a.boxes_from,
-            }) + "\n")
-            ix.flush()
-            n_ok += 1
 
-    log.info("Done. %d/%d visuals written to %s", n_ok, len(entries), out_dir)
+    with index.open("w", encoding="utf-8") as ix:
+        if a.format == "sam":
+            entries = load_sam_entries(Path(a.labels), a.limit)
+            if not entries:
+                log.error("No entries in %s", a.labels)
+                return 2
+            log.info("Rendering %d SAM-labelled images (min-confidence=%.2f)...",
+                     len(entries), a.min_confidence)
+            for i, e in enumerate(entries):
+                img_path = e["image"]
+                stem = Path(img_path).stem
+                log.info("[%d/%d] %s", i + 1, len(entries), Path(img_path).name)
+                try:
+                    inst = load_instance_mask(e, a.masks_subdir)
+                    n_in = len(e.get("boxes_xyxy", []))
+                    img = render_sam(
+                        img_path, e.get("boxes_xyxy", []), e.get("scores", []),
+                        inst, a.alpha, a.box_width, a.min_confidence,
+                    )
+                except Exception as exc:
+                    log.error("  failed: %s", exc)
+                    continue
+                dst = out_dir / f"{stem}.png"
+                img.save(dst)
+                kept = len([s for s in e.get("scores", []) if float(s) >= a.min_confidence])
+                ix.write(json.dumps({
+                    "image": img_path,
+                    "visual": str(dst),
+                    "n_boxes_in": n_in,
+                    "n_boxes_kept": kept,
+                    "min_confidence": a.min_confidence,
+                }) + "\n")
+                ix.flush()
+                n_ok += 1
+
+        else:
+            if not a.images:
+                log.error("--images is required for --format yolo")
+                return 2
+            img_dir = Path(a.images)
+            lbl_dir = Path(a.labels)
+            images = collect_images(img_dir, a.limit)
+            if not images:
+                log.error("No images found in %s", img_dir)
+                return 2
+            log.info("Rendering %d YOLO-labelled images -> %s", len(images), out_dir)
+            for img_path in images:
+                lbl_path = lbl_dir / (img_path.stem + ".txt")
+                boxes = load_yolo_boxes(lbl_path, *Image.open(img_path).size)
+                log.info("%s: %d box(es)", img_path.name, len(boxes))
+                try:
+                    rendered = render_yolo(img_path, lbl_path, a.box_width)
+                except Exception as exc:
+                    log.error("failed to render %s: %s", img_path.name, exc)
+                    continue
+                dst = out_dir / (img_path.stem + ".png")
+                rendered.save(dst)
+                ix.write(json.dumps({
+                    "image": str(img_path),
+                    "label": str(lbl_path),
+                    "visual": str(dst),
+                    "n_boxes": len(boxes),
+                }) + "\n")
+                ix.flush()
+                n_ok += 1
+
+    log.info("Done. %d visuals written to %s (index: %s)", n_ok, out_dir, index)
     return 0
 
 

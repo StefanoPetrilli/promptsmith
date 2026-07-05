@@ -1,0 +1,26 @@
+version: "3"
+
+vars:
+  PY: .venv/bin/python
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  setup:
+    desc: Create venv and install dependencies
+    cmds:
+      - python3 -m venv .venv
+      - .venv/bin/pip install --upgrade pip
+      - .venv/bin/pip install -r requirements.txt
+    status:
+      - test -d .venv
+      - test -f "{{.PY}}"
+
+  run:
+    desc: Run the webcam YOLO demo
+    deps: [setup]
+    cmds:
+      - "{{.PY}} manual_test.py --model best.pt"

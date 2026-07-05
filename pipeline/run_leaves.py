@@ -49,6 +49,9 @@ def parse_args() -> argparse.Namespace:
                    help="per-leaf script flag (bare name, e.g. 'prompts'); '--' is prepended")
     p.add_argument("--script", required=True, help="per-leaf python script to run")
     p.add_argument("--py", default=sys.executable, help="python interpreter to use")
+    p.add_argument("--prefix", default=None,
+                   help="optional prefix template forwarded as --prefix to each leaf; "
+                        "'{rel}' is replaced by the leaf's relative path with '/' -> '_'.")
     p.add_argument("extra", nargs=argparse.REMAINDER,
                    help="extra args forwarded to each leaf (use `--` to separate)")
     return p.parse_args()
@@ -80,6 +83,9 @@ def main() -> int:
             "--out", str(out_dir),
             *extra,
         ]
+        if a.prefix is not None:
+            substituted = a.prefix.replace("{rel}", rel.replace("/", "_"))
+            cmd.extend(["--prefix", substituted])
         rc = subprocess.run(cmd).returncode
         if rc != 0:
             print(f"run_leaves: {a.script} failed for {rel} (rc={rc})", file=sys.stderr)

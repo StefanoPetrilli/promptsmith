@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """Step 1 — build prompts for synthetic wrench photos across labelled categories.
 
-A deterministic weighted-axis generator. Each invocation targets one *mode* (and, for the
-positive modes, one wrench *count*) and writes its own leaf folder:
+A deterministic weighted-axis generator. Each invocation targets one *mode* and writes its
+own leaf folder:
 
-    data/prompts/<mode>[/<count>]/prompts.{jsonl,txt}
+    data/prompts/<mode>/prompts.{jsonl,txt}
 
 Modes (each with its own axis-weight bias + mode-aware negatives):
-  * clean_positive  — single/few isolated, fully-framed wrenches on a simple background.
+  * clean_positive  — one or more isolated, fully-framed wrenches on a simple background.
   * hard_positive   — small / distant / partially occluded / frame-edge / cluttered wrench.
   * hard_negative   — confusers (pliers, breaker bars, tire irons, pry bars, screwdrivers),
                       no wrench; negatives suppress `--no wrench`.
   * pure_negative   — realistic workshop scenes, no wrench, no confusers.
-  * asset           — isolated wrench on plain / white / transparent background.
+  * asset           — one or more isolated wrenches on plain / white / transparent background.
 
-Positive leaves are further split by wrench count (1/, 2/, n/); negative leaves are count-less.
+Positive prompts deliberately avoid specifying an exact wrench count (the image generation
+model is unreliable with numbers), using plural wording like "some chrome combination wrenches".
 """
 from __future__ import annotations
 
@@ -100,17 +101,15 @@ def _common_axes(rng: random.Random, mode: str) -> dict:
     }
 
 
-def _object_phrase(count: int, subtype: str, finish: str) -> str:
-    """`a chrome combination wrench` / `two chrome combination wrenches`."""
-    noun = subtype if count == 1 else _plural(subtype)
-    count_word = COUNT_WORDS.get(count, str(count))
-    return f"{count_word} {finish} {noun}"
+def _object_phrase(subtype: str, finish: str) -> str:
+    """`some chrome combination wrenches` — plural, no exact count."""
+    return f"some {finish} {_plural(subtype)}"
 
 
-def _positive_text(count: int, framing: str, subtype: str, finish: str,
+def _positive_text(framing: str, subtype: str, finish: str,
                    ax: dict, neg: str) -> str:
     parts = [
-        _object_phrase(count, subtype, finish),
+        _object_phrase(subtype, finish),
         framing,
         f"{ax['arrangement']} on {ax['surface']} in {ax['scene']}",
         ax["orientation"], ax["distance"], ax["lighting"],
@@ -120,17 +119,17 @@ def _positive_text(count: int, framing: str, subtype: str, finish: str,
     return _cap(_join(parts))
 
 
-def build_clean_positive(rng: random.Random, count: int) -> dict:
+def build_clean_positive(rng: random.Random) -> dict:
     subtype = rng.choice(WRENCH_TYPES)
     finish = rng.choice(FINISHES)
     ax = _common_axes(rng, "clean_positive")
-    framing = "fully in frame, clearly separated" if count > 1 else "fully in frame"
-    text = _positive_text(count, framing, subtype, finish, ax, NEG_CLEAN)
-    return {"text": text, "mode": "clean_positive", "count": count,
+    framing = "fully in frame, clearly separated"
+    text = _positive_text(framing, subtype, finish, ax, NEG_CLEAN)
+    return {"text": text, "mode": "clean_positive",
             "subtype": subtype, "finish": finish, **ax}
 
 
-def build_hard_positive(rng: random.Random, count: int) -> dict:
+def build_hard_positive(rng: random.Random) -> dict:
     subtype = rng.choice(WRENCH_TYPES)
     finish = rng.choice(FINISHES)
     ax = _common_axes(rng, "hard_positive")
@@ -141,25 +140,25 @@ def build_hard_positive(rng: random.Random, count: int) -> dict:
         "partially cut off by the frame",
         "small and partially in frame",
     ])
-    text = _positive_text(count, framing, subtype, finish, ax, NEG_HARD_POS)
-    return {"text": text, "mode": "hard_positive", "count": count,
+    text = _positive_text(framing, subtype, finish, ax, NEG_HARD_POS)
+    return {"text": text, "mode": "hard_positive",
             "subtype": subtype, "finish": finish,
             "framing": framing, **ax}
 
 
-def build_asset(rng: random.Random, count: int) -> dict:
+def build_asset(rng: random.Random) -> dict:
     subtype = rng.choice(WRENCH_TYPES)
     finish = rng.choice(FINISHES)
     bg = rng.choice(PLAIN_BACKGROUNDS)
     ax = _common_axes(rng, "asset")
-    framing = "fully in frame, clearly separated" if count > 1 else "fully in frame"
+    framing = "fully in frame, clearly separated"
     parts = [
-        _object_phrase(count, subtype, finish),
+        _object_phrase(subtype, finish),
         framing, f"on {bg} background",
         ax["orientation"], ax["distance"], ax["lighting"],
         "photorealistic, studio product shot", NEG_ASSET,
     ]
-    return {"text": _cap(_join(parts)), "mode": "asset", "count": count,
+    return {"text": _cap(_join(parts)), "mode": "asset",
             "subtype": subtype, "finish": finish, "background": bg, **ax}
 
 
@@ -194,34 +193,31 @@ def build_pure_negative(rng: random.Random) -> dict:
 
 
 BUILDERS = {
-    "clean_positive": lambda rng, c: build_clean_positive(rng, c),
-    "hard_positive": lambda rng, c: build_hard_positive(rng, c),
-    "asset": lambda rng, c: build_asset(rng, c),
-    "hard_negative": lambda rng, _c: build_hard_negative(rng),
-    "pure_negative": lambda rng, _c: build_pure_negative(rng),
+    "clean_positive": lambda rng: build_clean_positive(rng),
+    "hard_positive": lambda rng: build_hard_positive(rng),
+    "asset": lambda rng: build_asset(rng),
+    "hard_negative": lambda rng: build_hard_negative(rng),
+    "pure_negative": lambda rng: build_pure_negative(rng),
 }
 
 
-def leaf_seed(base_seed: int, mode: str, count: int) -> int:
-    """Stable per-leaf seed so each (mode,count) invocation is independently reproducible
+def leaf_seed(base_seed: int, mode: str) -> int:
+    """Stable per-leaf seed so each mode invocation is independently reproducible
     and does not overlap another leaf's RNG stream."""
-    h = hashlib.sha1(f"{mode}:{count}".encode()).hexdigest()
+    h = hashlib.sha1(f"{mode}".encode()).hexdigest()
     return base_seed + (int(h, 16) % 1_000_000)
 
 
-def leaf_dir(out: Path, mode: str, count: int) -> Path:
-    d = out / mode
-    if mode in POSITIVE_MODES:
-        d = d / str(count)
-    return d
+def leaf_dir(out: Path, mode: str) -> Path:
+    return out / mode
 
 
-def generate(mode: str, count: int, n: int, seed: int) -> list[dict]:
+def generate(mode: str, n: int, seed: int) -> list[dict]:
     builder = BUILDERS[mode]
-    rng = random.Random(leaf_seed(seed, mode, count))
+    rng = random.Random(leaf_seed(seed, mode))
     seen, out, tries = set(), [], 0
     while len(out) < n and tries < n * 20:
-        p = builder(rng, count)
+        p = builder(rng)
         key = p["text"]
         if key not in seen:
             seen.add(key)
@@ -229,7 +225,7 @@ def generate(mode: str, count: int, n: int, seed: int) -> list[dict]:
         tries += 1
     if len(out) < n:
         raise RuntimeError(
-            f"could only generate {len(out)} unique {mode}/{count} prompts after {tries} tries"
+            f"could only generate {len(out)} unique {mode} prompts after {tries} tries"
         )
     return out
 
@@ -250,19 +246,14 @@ def write(prompts: list[dict], out_dir: Path) -> tuple[Path, Path]:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Generate synthetic-image prompts (step 1).")
     ap.add_argument("--mode", required=True, choices=ALL_MODES,
-                    help="prompt category; writes to <out>/<mode>[/<count>]/")
-    ap.add_argument("--count", type=int, default=1,
-                    help="wrenches per prompt (positive modes only; ignored for negatives)")
+                    help="prompt category; writes to <out>/<mode>/")
     ap.add_argument("--n", type=int, default=1000, help="number of prompts to generate")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", default="data/prompts", help="parent output directory")
     args = ap.parse_args()
 
-    if args.mode in POSITIVE_MODES and args.count < 1:
-        ap.error(f"--count must be >=1 for positive mode {args.mode}")
-
-    prompts = generate(args.mode, args.count, args.n, args.seed)
-    out_dir = leaf_dir(Path(args.out), args.mode, args.count)
+    prompts = generate(args.mode, args.n, args.seed)
+    out_dir = leaf_dir(Path(args.out), args.mode)
     jsonl, txt = write(prompts, out_dir)
     rel = out_dir.relative_to(Path(args.out)).as_posix()
     print(f"wrote {len(prompts)} {rel} prompts -> {jsonl}, {txt}")

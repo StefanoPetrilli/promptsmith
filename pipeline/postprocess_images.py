@@ -6,8 +6,8 @@ most accurate). Produces a degraded image tree that step 5 trains on, while step
 aligned by stem: the output keeps the same indices/filenames as the input so `<stem>.txt` labels
 still match.
 
-    Input : data/images/<category>[/<count>]/  (+ manifest.jsonl from step 2)
-    Output: data/images_pp/<category>[/<count>]/img_{i:04d}.png + manifest_pp.jsonl
+    Input : data/images/<category>/  (+ manifest.jsonl from step 2)
+    Output: data/images_pp/<category>/<prefix>img_{i:04d}.png + manifest_pp.jsonl
 
 CPU-only (Albumentations). Never loads FLUX or SAM. Strength is sampled from a seeded RNG
 (`seed + i`, matching step 2's per-image seeding) and kept mild — pixel-only ops, no geometric

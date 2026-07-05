@@ -4,7 +4,7 @@ version: "3"
 # Each step has a `*-test` task that runs on a handful of images for verification.
 # The test variants write to the SAME folders as the normal tasks (no `_test` dirs).
 #
-#   generate              step 1 — weighted-axis prompts -> data/prompts/<mode>[/<count>]/
+#   generate              step 1 — weighted-axis prompts -> data/prompts/<mode>/
 #   generate-test         step 1 — 3 prompts per leaf
 #   images                step 2 — FLUX.2-klein-4B render every leaf -> data/images/
 #   images-test           step 2 — render first 3 prompts per leaf
@@ -23,17 +23,13 @@ vars:
   SAM3_CKPT: models/sam3/sam3.pt
   SIZE: "768"
   STEPS: "8"
-  # --- prompt counts (tune the dataset size from here) -----------------------
+  # --- prompt counts per mode (tune the dataset size from here) --------------
   # clean_positive
-  N_CLEAN_1: "600"
-  N_CLEAN_2: "90"
-  N_CLEAN_3: "30"
+  N_CLEAN: "720"
   # hard_positive
-  N_HARD_1: "150"
-  N_HARD_2: "25"
+  N_HARD: "175"
   # asset
-  N_ASSET_1: "100"
-  N_ASSET_2: "20"
+  N_ASSET: "120"
   # negatives
   N_HARD_NEG: "200"
   N_PURE_NEG: "150"
@@ -42,31 +38,26 @@ vars:
 
 tasks:
   generate:
-    desc: "Step 1: weighted-axis prompts -> data/prompts/<mode>[/<count>]/"
+    desc: "Step 1: weighted-axis prompts -> data/prompts/<mode>/"
     cmds:
-      # clean_positive — the bulk; mostly 1 wrench, some 2-3 clearly separated
-      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 1 --n {{.N_CLEAN_1}} --out data/prompts"
-      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 2 --n {{.N_CLEAN_2}} --out data/prompts"
-      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 3 --n {{.N_CLEAN_3}} --out data/prompts"
-      # hard_positive — small / distant / occluded / frame-edge (mostly 1)
-      - "{{.PY}} pipeline/generate_prompts.py --mode hard_positive --count 1 --n {{.N_HARD_1}} --out data/prompts"
-      - "{{.PY}} pipeline/generate_prompts.py --mode hard_positive --count 2 --n {{.N_HARD_2}} --out data/prompts"
-      # asset — isolated product shots
-      - "{{.PY}} pipeline/generate_prompts.py --mode asset --count 1 --n {{.N_ASSET_1}} --out data/prompts"
-      - "{{.PY}} pipeline/generate_prompts.py --mode asset --count 2 --n {{.N_ASSET_2}} --out data/prompts"
-      # negatives — count-less
+      # clean_positive — isolated, fully-framed wrenches on simple backgrounds
+      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --n {{.N_CLEAN}} --out data/prompts"
+      # hard_positive — small / distant / occluded / frame-edge / cluttered wrenches
+      - "{{.PY}} pipeline/generate_prompts.py --mode hard_positive --n {{.N_HARD}} --out data/prompts"
+      # asset — isolated product shots on plain backgrounds
+      - "{{.PY}} pipeline/generate_prompts.py --mode asset --n {{.N_ASSET}} --out data/prompts"
+      # negatives — no wrench
       - "{{.PY}} pipeline/generate_prompts.py --mode hard_negative --n {{.N_HARD_NEG}} --out data/prompts"
       - "{{.PY}} pipeline/generate_prompts.py --mode pure_negative --n {{.N_PURE_NEG}} --out data/prompts"
 
   generate-test:
-    desc: "Step 1 (test): {{.N_TEST}} prompts per (mode,count) leaf"
+    desc: "Step 1 (test): {{.N_TEST}} prompts per mode leaf"
     cmds:
-      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 1 --n {{.N_TEST}} --out data/prompts"
-      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --count 2 --n {{.N_TEST}} --out data/prompts"
-      - "{{.PY}} pipeline/generate_prompts.py --mode hard_positive  --count 1 --n {{.N_TEST}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --n {{.N_TEST}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode hard_positive --n {{.N_TEST}} --out data/prompts"
       - "{{.PY}} pipeline/generate_prompts.py --mode hard_negative --n {{.N_TEST}} --out data/prompts"
       - "{{.PY}} pipeline/generate_prompts.py --mode pure_negative --n {{.N_TEST}} --out data/prompts"
-      - "{{.PY}} pipeline/generate_prompts.py --mode asset --count 1 --n {{.N_TEST}} --out data/prompts"
+      - "{{.PY}} pipeline/generate_prompts.py --mode asset --n {{.N_TEST}} --out data/prompts"
 
   images:
     desc: "Step 2: render every leaf prompt folder with FLUX.2-klein-4B -> data/images/"
@@ -76,6 +67,7 @@ tasks:
         --root data/prompts --marker prompts.txt
         --out-root data/images --input-arg prompts
         --script pipeline/generate_images.py
+        --prefix {rel}_
         -- --model {{.MODEL}} --size {{.SIZE}} --steps {{.STEPS}}
 
   images-test:
@@ -86,6 +78,7 @@ tasks:
         --root data/prompts --marker prompts.txt
         --out-root data/images --input-arg prompts
         --script pipeline/generate_images.py
+        --prefix {rel}_
         -- --model {{.MODEL}} --size {{.SIZE}} --steps {{.STEPS}} --limit 3
 
   label:
@@ -148,11 +141,30 @@ tasks:
         --script pipeline/visualize_labels.py
         -- --limit 3
 
+  download-openimages:
+    desc: "Download Open Images Wrench real images as val data (uses train split; validation/test have <2 images)"
+    cmds:
+      - "{{.PY}} pipeline/download_openimages.py --class-name Wrench --split train \
+        --out data/openimages_val --limit 500"
+
+  visualize-openimages:
+    desc: "Overlay YOLO boxes on Open Images validation set -> data/openimages_val/visuals/"
+    cmds:
+      - "{{.PY}} pipeline/visualize_openimages.py --images data/openimages_val/images \
+        --labels data/openimages_val/labels --out data/openimages_val/visuals"
+
   train:
     desc: "Step 5: assemble single-class YOLO dataset (from data/images_pp/) + fine-tune"
     cmds:
       - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
         --out data/dataset --base models/yolov8n.pt --epochs 50 --imgsz 640 --batch 16"
+
+  train-real-val:
+    desc: "Step 5: train on synthetic, validate on real Open Images Wrench"
+    cmds:
+      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
+        --val-images data/openimages_val/images --val-labels data/openimages_val/labels \
+        --out data/dataset --base models/yolov8n.pt --epochs 500 --patience 15 --imgsz 640 --batch 16"
 
   train-test:
     desc: "Step 5 (test): 1-epoch smoke -> data/dataset/"
@@ -160,3 +172,17 @@ tasks:
       - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
         --out data/dataset --base models/yolov8n.pt --epochs 1 --imgsz 320 --batch 1 \
         --allow-dummy-labels"
+
+  inference-train:
+    desc: "Run trained model on the training set and save visualizations"
+    cmds:
+      - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
+        --source data/dataset/images/train --out data/inference_train"
+
+  inference-val:
+    desc: "Run trained model on the validation set and save visualizations"
+    cmds:
+      - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
+        --source data/dataset/images/val --out data/inference_val"
+
+

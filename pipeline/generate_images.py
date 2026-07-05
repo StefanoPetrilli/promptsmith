@@ -99,6 +99,11 @@ def parse_args() -> argparse.Namespace:
         "--restart", action="store_true",
         help="ignore existing images in --out; regenerate everything (manifest is appended).",
     )
+    p.add_argument(
+        "--prefix", default="",
+        help="filename prefix for output images (e.g. 'clean_positive_'). "
+             "Final names are <prefix>img_{i:04d}.png.",
+    )
     return p.parse_args()
 
 
@@ -139,8 +144,10 @@ def _embed_to_nprow(e: torch.Tensor, store_np: np.dtype, dtype: torch.dtype):
 
 
 def _row_to_torch(np_row, dtype: torch.dtype) -> torch.Tensor:
-    """Read a (1, L, D) numpy view from the memmap -> torch tensor in `dtype` (shares the page)."""
-    t = torch.from_numpy(np_row)  # uint16 or float32; shares the memmap page (lazy page-in)
+    """Read a (1, L, D) numpy view from the memmap -> torch tensor in `dtype`."""
+    # The memmap is read-only, so clone after converting to make the tensor writable
+    # and avoid the PyTorch non-writable-array warning. The per-row copy is ~6 MB.
+    t = torch.from_numpy(np_row).clone()  # uint16 or float32; page is faulted in here
     if t.dtype == torch.uint16:
         t = t.view(dtype)  # reinterpret bits -> fp16 / bf16
     return t
@@ -319,6 +326,23 @@ def precompute_prompt_embeds(
     gc.collect()
 
 
+def _memmap_is_valid(mm: np.ndarray, chunk: int = 64) -> bool:
+    """A valid embedding memmap should have no all-zero rows. Check in chunks so we don't
+    page the whole multi-GB file into RAM at once."""
+    N = mm.shape[0]
+    for start in range(0, N, chunk):
+        rows = mm[start:start + chunk]
+        ok = np.any(rows, axis=(1, 2))
+        if not ok.all():
+            bad = (np.where(~ok)[0] + start).tolist()
+            log.warning(
+                "Memmap has %d all-zero row(s) (first bad indices: %s); treating as incomplete.",
+                len(bad), bad[:5],
+            )
+            return False
+    return True
+
+
 def load_or_compute_embeds(model_id: str, out: str, prompts: list[str], dtype: torch.dtype):
     """Return (numpy memmap (N,L,D) read-only, tokenizer). Builds the memmap from Qwen3 if
     absent, or converts a legacy `.pt` cache if present. Never holds the full embedding set in
@@ -329,8 +353,13 @@ def load_or_compute_embeds(model_id: str, out: str, prompts: list[str], dtype: t
     cache = embed_cache_path(out, model_id, prompts)
 
     if cache.exists():
-        log.info("Found memmap embeddings: %s -> opening read-only (lazy paging)", cache)
-        return np.lib.format.open_memmap(cache, mode="r"), tok
+        mm = np.lib.format.open_memmap(cache, mode="r")
+        if _memmap_is_valid(mm):
+            log.info("Found memmap embeddings: %s -> opening read-only (lazy paging)", cache)
+            return mm, tok
+        log.warning("Existing memmap %s is incomplete; deleting and recomputing.", cache.name)
+        del mm
+        cache.unlink()
 
     cache.parent.mkdir(parents=True, exist_ok=True)
 
@@ -496,11 +525,16 @@ def build_pipeline(
     return pipe
 
 
-def find_completed(out_dir: Path, n: int) -> set[int]:
-    """Return indices i in [0, n) whose `img_{i:04d}.png` exists in out_dir."""
+def image_name(prefix: str, i: int) -> str:
+    """Build output image filename from optional prefix and index."""
+    return f"{prefix}img_{i:04d}.png"
+
+
+def find_completed(out_dir: Path, prefix: str, n: int) -> set[int]:
+    """Return indices i in [0, n) whose output image exists in out_dir."""
     done = set()
     for i in range(n):
-        if (out_dir / f"img_{i:04d}.png").exists():
+        if (out_dir / image_name(prefix, i)).exists():
             done.add(i)
     return done
 
@@ -524,7 +558,7 @@ def backfill_manifest(out_dir: Path, prompts: list[str], done: set[int], manifes
     if missing:
         with manifest.open("a", encoding="utf-8") as mf:
             for i in missing:
-                path = out_dir / f"img_{i:04d}.png"
+                path = out_dir / image_name(prefix, i)
                 mf.write(json.dumps({"index": i, "image": str(path), "prompt": prompts[i]}) + "\n")
         log.info("Backfilled %d missing manifest entries.", len(missing))
     return have
@@ -549,10 +583,10 @@ def main() -> int:
     log.info("Embeddings memmap: shape=%s dtype=%s (read-only, paged per image)", embeds_mm.shape, embeds_mm.dtype)
 
     # --- resume: skip images whose PNG already exists ---
-    done = set() if a.restart else find_completed(out_dir, len(prompts))
+    done = set() if a.restart else find_completed(out_dir, a.prefix, len(prompts))
     manifest = out_dir / "manifest.jsonl"
     if done:
-        backfill_manifest(out_dir, prompts, done, manifest)
+        backfill_manifest(out_dir, a.prefix, prompts, done, manifest)
         log.info("Resume: %d/%d images already present -> skipping them.", len(done), len(prompts))
         if len(done) == len(prompts):
             log.info("All %d images already generated. Nothing to do.", len(prompts))
@@ -588,7 +622,7 @@ def main() -> int:
                 log.error("OOM on prompt %d (%.1fs): %s", i, time.time() - t0, e)
                 torch.cuda.empty_cache()
                 return 3
-            path = out_dir / f"img_{i:04d}.png"
+            path = out_dir / image_name(a.prefix, i)
             img.save(path)
             mf.write(json.dumps({"index": i, "image": str(path), "prompt": prompt}) + "\n")
             mf.flush()

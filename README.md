@@ -8,11 +8,13 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 
 | # | Task | What it does |
 |---|------|--------------|
-| 1 | `pipeline:generate` (`--test`) | Write N varied *"one wrench"* prompts → `data/prompts.{jsonl,txt}` |
+| 1 | `pipeline:generate` (`--test`) | Write N varied wrench prompts → `data/prompts/<mode>/prompts.{jsonl,txt}` |
 | 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (fp16 + partial GPU pinning; Qwen3 embeds precomputed + cached) → `data/images/` |
 | 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` |
 | 4 | `pipeline:visualize` (`visualize-test`) | Overlay SAM 3 segmentation + boxes on the images → `data/visuals/` |
 | 5 | `pipeline:train` (`train-test`) | Assemble train/val split + fine-tune **YOLOv8n** → `data/dataset/runs/` |
+|   | `pipeline:download-openimages` | Download real **Open Images** wrench images for validation → `data/openimages_val/` |
+|   | `pipeline:train-real-val` | Train on synthetic images, validate on real Open Images |
 
 Each `*-test` variant runs on a handful of images for a quick smoke check.
 
@@ -38,6 +40,32 @@ task pipeline:images-test
 task pipeline:label-test
 task pipeline:train-test
 task pipeline:visualize-test
+
+```
+
+
+## Real-world validation with Open Images
+
+The synthetic validation split can be replaced by real wrench images from Open Images:
+
+```bash
+task pipeline:download-openimages   # ~200 real wrench images -> data/openimages_val/
+task pipeline:train-real-val        # train on synthetic, validate on real images
+```
+
+You can also run the downloader directly:
+
+```bash
+python pipeline/download_openimages.py --class-name Wrench --split train \
+  --out data/openimages_val --limit 500
+```
+
+Then point training at the real validation set:
+
+```bash
+python pipeline/train_yolo.py --images data/images --labels data/labels \
+  --val-images data/openimages_val/images --val-labels data/openimages_val/labels \
+  --out data/dataset --epochs 500 --patience 15
 ```
 
 ## Layout

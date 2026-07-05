@@ -17,8 +17,7 @@ WRENCH_TYPES = [
     "flare-nut wrench",
     "open-end wrench",
     "adjustable pipe wrench",
-    "flex combination wrench",
-    "dogleg wrench"
+    "flex combination wrench"
 ]
 
 FINISHES = [

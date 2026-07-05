@@ -1,58 +1,14 @@
 #!/usr/bin/env python3
 """Step 2 — render prompts into images with FLUX.2-klein-4B (fp16).
 
-Single transformer backend:
-  * fp16 (`--model black-forest-labs/FLUX.2-klein-4B`): unquantized fp16 weights loaded from the
-    diffusers `transformer/` subfolder. Lossless. Combined with `--pin-policy partial` this pins
-    most blocks on the GPU and offloads the rest per-block (~3x less PCIe traffic than sequential
-    offload).
-
-(The FLUX.2-klein-9B GGUF path was removed: on a 6 GB GPU the Q4_K_M quantization produced
-visible artifacts, the unquantized 9B doesn't fit, and NF4 text-encoder loading OOMs. The 4B
-fp16 path is lossless and produces cleaner images on this hardware.)
-
-Qwen3 text encoder (~8 GB in bf16): embeddings are precomputed + cached to disk, then released
-before the transformer loads (the two never coexist on the GPU). Loaded in **bfloat16**, the
-checkpoint's native dtype (`text_encoder/config.json` -> `"dtype": "bfloat16"`), to avoid
-from_pretrained casting bf16->fp16 — that cast temporarily holds BOTH the mmap'd bf16 pages and
-the new fp16 copy (~2x peak). Final embeddings are cast to `--dtype` in _embed_one, so loading in
-bf16 does not change the cached output. Placement: loaded on CPU then `embed_tokens` + `rotary_emb`
-+ `norm` + as many of the 36 decoder layers as fit are pinned on cuda, the rest offloaded
-per-forward (move to cuda, compute, move back). This maximizes GPU residency on a 6 GB card —
-`device_map="balanced"` + `max_memory` is only a soft budget that Qwen3's tied lm_head/embed_tokens
-weights blow past -> OOM, and one-layer-at-a-time sequential offload is far slower. The inner
-`Qwen3Model` is called directly (skipping `lm_head` and its ~155 MB logits tensor) since only
-`hidden_states` are needed. Later runs hit the memmap cache and never reload Qwen3.
-
-Two offload policies (`--pin-policy`):
-  * `partial` (default): pin the VAE + all small transformer modules + all double-stream
-    blocks + as many single-stream blocks as fit in VRAM on the GPU permanently; offload the
-    remaining single blocks one-at-a-time via pre/post-forward hooks (cuda -> compute -> cpu).
-    The latent tensor stays on cuda the whole time, so only the offloaded block weights shuttle
-    across PCIe. Lossless.
-  * `sequential`: the old `enable_sequential_cpu_offload` — one sub-module on the GPU at a
-    time, slow, fits a 6 GB card. Kept as a fallback.
-
-Embeddings are cached as a numpy memmap (`.embeds.npy`, shape (N, L, D)) holding the raw
-bit-pattern of the fp16/bf16 tensors. During generation the file is opened read-only and only
-row `i` is paged into RAM per image (~6 MB resident vs ~8 GB if the whole list were held in
-RAM). This keeps the generation loop out of swap — critical because the transformer already
-occupies ~8 GB of the machine's RAM. A legacy `.pt` cache (list of per-prompt tensors) from
-older runs is auto-converted to the memmap format on first use, no recompute needed.
-
-Resume: on startup the output dir is scanned for existing `img_{i:04d}.png` files; those
-indices are skipped and their manifest entries backfilled if missing. Generation continues
-from the first missing image. Each image uses an independent generator seeded `seed + i` so a
-resumed run produces the same noise per image as a fresh run (not a shared RNG stream).
-
-Inputs: one prompt per line (`#`/blank lines skipped). Outputs: `img_{i:04d}.png` plus a
-`manifest.jsonl` (prompt -> image, used by step 3). `--limit N` renders only the first N.
+Embeddings from Qwen3 are precomputed once, streamed to a numpy memmap, and released
+before the transformer loads. Generation resumes from existing PNGs and uses an
+independent per-image seed so resumes are deterministic.
 """
 from __future__ import annotations
 
 import os
-# Set before `import torch` / any CUDA context initialization so the caching allocator uses
-# expandable segments — eliminates fragmentation and reclaims reserved-but-unallocated VRAM.
+
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import argparse
@@ -76,47 +32,36 @@ EMBED_MEMMAP_SUFFIX = ".embeds.npy"
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="FLUX.2-klein-4B image generation (step 2).")
-    p.add_argument("--model", default="black-forest-labs/FLUX.2-klein-4B",
-                   help="HF repo for transformer/VAE/scheduler/tokenizer/text_encoder.")
-    p.add_argument("--prompts", required=True, help="one prompt per line (output of step 1)")
-    p.add_argument("--out", required=True, help="output directory for PNGs + manifest")
-    p.add_argument("--size", type=int, default=768, help="square image edge (multiple of 16)")
-    p.add_argument("--steps", type=int, default=8, help="distilled model -> few steps OK")
+    p.add_argument("--model", default="black-forest-labs/FLUX.2-klein-4B")
+    p.add_argument("--prompts", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--size", type=int, default=768)
+    p.add_argument("--steps", type=int, default=8)
     p.add_argument("--guidance", type=float, default=4.0)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="fp16")
-    p.add_argument("--limit", type=int, default=0, help="0 = all prompts; else first N (test)")
+    p.add_argument("--limit", type=int, default=0)
     p.add_argument(
         "--pin-policy", choices=["partial", "sequential"], default="partial",
-        help="partial (default): pin VAE + small modules + double blocks + as many single blocks "
-             "as fit in VRAM, offload the rest per-block. sequential: old one-module-at-a-time offload.",
     )
-    p.add_argument(
-        "--vram-margin", type=float, default=1.2,
-        help="GB of VRAM to reserve for activations/display when auto-pinning single blocks (partial).",
-    )
-    p.add_argument(
-        "--restart", action="store_true",
-        help="ignore existing images in --out; regenerate everything (manifest is appended).",
-    )
-    p.add_argument(
-        "--prefix", default="",
-        help="filename prefix for output images (e.g. 'clean_positive_'). "
-             "Final names are <prefix>img_{i:04d}.png.",
-    )
+    p.add_argument("--vram-margin", type=float, default=1.2)
+    p.add_argument("--restart", action="store_true")
+    p.add_argument("--prefix", default="")
     return p.parse_args()
 
 
 def load_prompts(path: str, limit: int) -> list[str]:
-    lines = [l.strip() for l in Path(path).read_text().splitlines()
-             if l.strip() and not l.lstrip().startswith("#")]
+    lines = [
+        line.strip()
+        for line in Path(path).read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
     return lines[:limit] if limit > 0 else lines
 
 
 def embed_cache_key(model: str, prompts: list[str]) -> str:
-    return hashlib.sha1(
-        json.dumps({"m": model, "n": len(prompts), "p": prompts}).encode()
-    ).hexdigest()[:16]
+    payload = json.dumps({"m": model, "n": len(prompts), "p": prompts})
+    return hashlib.sha1(payload.encode()).hexdigest()[:16]
 
 
 def embed_cache_path(out: str, model: str, prompts: list[str]) -> Path:
@@ -127,237 +72,178 @@ def embed_legacy_cache_path(out: str, model: str, prompts: list[str]) -> Path:
     return Path(out) / f"_embeds_{embed_cache_key(model, prompts)}.pt"
 
 
-def _np_store_dtype(dtype: torch.dtype) -> np.dtype:
-    """Numpy dtype used to store the raw bit-pattern of `dtype` tensors in the memmap file."""
-    if dtype == torch.float32:
-        return np.float32
-    return np.uint16  # 2-byte raw bit pattern for fp16 / bf16 (numpy has no bfloat16)
+def torch_dtype(name: str) -> torch.dtype:
+    return {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[name]
 
 
-def _embed_to_nprow(e: torch.Tensor, store_np: np.dtype, dtype: torch.dtype):
-    """(L, D) torch tensor in `dtype` -> numpy array of `store_np` sharing the exact bit pattern."""
+def np_store_dtype(dtype: torch.dtype) -> np.dtype:
+    return np.float32 if dtype == torch.float32 else np.uint16
+
+
+def tensor_to_nprow(tensor: torch.Tensor, dtype: torch.dtype) -> np.ndarray:
     if dtype == torch.bfloat16:
-        return e.view(torch.uint16).numpy()  # numpy has no bfloat16 -> store raw uint16 bits
+        return tensor.view(torch.uint16).numpy()
     if dtype == torch.float16:
-        return e.numpy().view(np.uint16)  # reinterpret fp16 bytes as uint16
-    return e.numpy()  # float32
+        return tensor.numpy().view(np.uint16)
+    return tensor.numpy()
 
 
-def _row_to_torch(np_row, dtype: torch.dtype) -> torch.Tensor:
-    """Read a (1, L, D) numpy view from the memmap -> torch tensor in `dtype`."""
-    # The memmap is read-only, so clone after converting to make the tensor writable
-    # and avoid the PyTorch non-writable-array warning. The per-row copy is ~6 MB.
-    t = torch.from_numpy(np_row).clone()  # uint16 or float32; page is faulted in here
-    if t.dtype == torch.uint16:
-        t = t.view(dtype)  # reinterpret bits -> fp16 / bf16
-    return t
+def nprow_to_tensor(row: np.ndarray, dtype: torch.dtype) -> torch.Tensor:
+    tensor = torch.from_numpy(row.copy())
+    if tensor.dtype == torch.uint16:
+        tensor = tensor.view(dtype)
+    return tensor
 
 
-def _module_size_bytes(m: torch.nn.Module) -> int:
-    return sum(p.numel() * p.element_size() for p in m.parameters())
+def module_size_mb(module: torch.nn.Module) -> float:
+    return sum(p.numel() * p.element_size() for p in module.parameters()) / 1e6
 
 
-def _pin_qwen3_layers(te, vram_margin_gb: float = 0.60):
-    """Pin embed_tokens + rotary_emb + norm + as many decoder layers as fit on cuda; offload the
-    rest per-forward (move to cuda in pre-hook, back to cpu in post-hook). Returns (n_pinned, n_offloaded).
+def free_vram_gb(device: torch.device) -> float:
+    free_b, _ = torch.cuda.mem_get_info(device)
+    return free_b / 1e9
 
-    The hidden_states tensor is created on cuda by embed_tokens and stays on cuda throughout, so
-    offloaded layers compute on cuda and only their own weights shuttle across PCIe. Lossless:
-    identical bf16 weights, just placed.
 
-    Pinning is **dynamic**: each layer is moved to cuda one at a time and the *actual* free VRAM
-    is measured after each (via `mem_get_info`), stopping when free drops below the margin + one
-    layer's worth. This is robust to `_module_size_bytes` undercounting (it misses, e.g., the tied
-    lm_head weight, CUDA context overhead, and the 37 captured hidden-state buffers ~96 MB) — a
-    precomputed `free // layer_bytes` budget would over-pin and OOM on the first offloaded layer.
-    """
+def _offload_hooks(module: torch.nn.Module, cuda: torch.device, cpu: torch.device):
+    def pre(m, _args):
+        m.to(cuda)
+
+    def post(m, _args, output):
+        m.to(cpu)
+        return output
+
+    return module.register_forward_pre_hook(pre), module.register_forward_hook(post)
+
+
+def pin_layers(layers: list[torch.nn.Module], margin_gb: float) -> tuple[int, int]:
+    """Pin as many layers on GPU as fit; offload the rest via hooks."""
     cuda = torch.device("cuda")
     cpu = torch.device("cpu")
-    inner = te.model  # Qwen3Model
-
-    # Pin small modules first (embed_tokens ~778 MB, rotary/norm tiny).
-    inner.embed_tokens.to(cuda)
-    inner.rotary_emb.to(cuda)
-    inner.norm.to(cuda)
-    torch.cuda.empty_cache()
-
-    layers = inner.layers
-    layer_bytes = _module_size_bytes(layers[0])
-    # Stop when free VRAM < margin + one offloaded layer (so an offloaded layer can still load in).
-    threshold_b = vram_margin_gb * 1e9 + layer_bytes
+    layer_mb = module_size_mb(layers[0])
+    threshold_b = margin_gb * 1e9 + layer_mb * 1e6
 
     n_pin = 0
-    for blk in layers:
-        free_b, _ = torch.cuda.mem_get_info(cuda)
-        if free_b < threshold_b:
+    for layer in layers:
+        if torch.cuda.mem_get_info(cuda)[0] < threshold_b:
             break
-        blk.to(cuda)
+        layer.to(cuda)
         torch.cuda.empty_cache()
         n_pin += 1
 
-    n_off = len(layers) - n_pin
-    free_b, _ = torch.cuda.mem_get_info(cuda)
-    offloaded = list(layers[n_pin:])
+    for layer in layers[n_pin:]:
+        _offload_hooks(layer, cuda, cpu)
 
-    for blk in offloaded:
-        def _pre(module, _args, _cuda=cuda):
-            module.to(_cuda)
-            return None
+    return n_pin, len(layers) - n_pin
 
-        def _post(module, _args, output, _cpu=cpu):
-            module.to(_cpu)
+
+def _capture_hooks(layers: list[torch.nn.Module], target_indices: tuple[int, ...]):
+    captured: dict[int, torch.Tensor] = {}
+
+    def make_hook(idx: int):
+        def hook(_module, _args, output):
+            captured[idx] = output
             return output
+        return hook
 
-        blk.register_forward_pre_hook(_pre)
-        blk.register_forward_hook(_post)
-
-    torch.cuda.empty_cache()
-    log.info(
-        "qwen3-pin: layer=%.0f MB, margin=%.2f GB, stop-threshold=%.2f GB free -> pinned %d/%d decoder layers "
-        "(+ embed_tokens/rotary/norm); offloading %d (~%.0f MB PCIe/layer each). VRAM free now %.2f GB.",
-        layer_bytes / 1e6, vram_margin_gb, threshold_b / 1e9, n_pin, len(layers), n_off,
-        layer_bytes / 1e6, free_b / 1e9,
-    )
-    return n_pin, n_off
+    handles = [layers[k].register_forward_hook(make_hook(k)) for k in target_indices]
+    return captured, handles
 
 
 def precompute_prompt_embeds(
     model_id: str, prompts: list[str], dtype: torch.dtype, cache_path: Path, tokenizer,
 ):
-    """Load Qwen3 (bfloat16, native ckpt dtype), pin as many of its 36 decoder layers on the GPU
-    as fit and offload the rest per-forward, stream FLUX.2 prompt embeddings row-by-row into a
-    memmap file, then release Qwen3. Only one embedding (~6 MB) + Qwen3 are resident at a time;
-    the full embedding set is never held in RAM.
-
-    Placement: the ~8 GB TE doesn't fit a 6 GB GPU fully, and `device_map="balanced"` +
-    `max_memory` is only a *soft* budget that Qwen3's tied lm_head/embed_tokens weights blow past
-    -> OOM. Instead we load on CPU and manually pin `embed_tokens` + `rotary_emb` + `norm` + as
-    many decoder layers as fit (leaving room for one offloaded layer + activations), then hook each
-    remaining layer to move to cuda right before its forward and back to cpu after. This maximizes
-    GPU residency (~23 of 36 layers on a 5.6 GiB card) — far faster than one-layer-at-a-time
-    sequential offload or a full-CPU forward. Lossless (identical bf16 weights).
-
-    We call the inner `te.model` (Qwen3Model) directly, NOT `te` (Qwen3ForCausalLM): we only need
-    three intermediate layer outputs, so we skip `lm_head`'s matmul and its 512x151936 logits
-    tensor (~155 MB) — saving VRAM and time. lm_head is tied to embed_tokens anyway
-    (`tie_word_embeddings: True`), so it adds no weights. We capture only layers (9, 18, 27) via
-    per-layer forward hooks instead of `output_hidden_states=True` (which retains all 37
-    hidden-state buffers on cuda ~96 MB). Final embeddings are cast to `dtype` in _embed_one, so
-    loading in bf16 does not change the cached output.
-    """
     from transformers import Qwen3ForCausalLM
 
-    log.info("Loading Qwen3 text encoder (bfloat16, ~8 GB) on CPU, then pinning max layers to GPU...")
+    log.info("Loading Qwen3 text encoder (bfloat16) on CPU...")
     te = Qwen3ForCausalLM.from_pretrained(
         model_id, subfolder="text_encoder", torch_dtype=torch.bfloat16, low_cpu_mem_usage=True,
     ).to("cpu").eval()
-    enc_device = torch.device("cuda")
-    n_pin, n_off = _pin_qwen3_layers(te, vram_margin_gb=0.60)
-    log.info(
-        "Qwen3 placed: pinned %d/%d decoder layers + embed_tokens/norm/rotary on cuda, offloading %d. "
-        "Streaming embeddings for %d prompts -> %s ...",
-        n_pin, len(te.model.layers), n_off, len(prompts), cache_path.name,
-    )
 
-    store_np = _np_store_dtype(dtype)
-    hidden_states_layers = (9, 18, 27)
+    inner = te.model
+    inner.embed_tokens.to("cuda")
+    inner.rotary_emb.to("cuda")
+    inner.norm.to("cuda")
+    n_pin, n_off = pin_layers(list(inner.layers), margin_gb=0.60)
+    log.info("Qwen3 pinned %d/%d decoder layers; offloading %d.", n_pin, len(inner.layers), n_off)
 
-    # Capture ONLY the 3 layer outputs we need via per-layer forward hooks, instead of
-    # `output_hidden_states=True` (which uses `@capture_outputs` and retains all 37 hidden-state
-    # buffers on cuda ~96 MB + overhead). The decoder layer returns a single `hidden_states`
-    # tensor, so the hook receives it directly as `output`.
-    _captured: dict[int, torch.Tensor] = {}
-    _hooks = []
-    for k in hidden_states_layers:
-        def _make_hook(idx):
-            def _hook(_module, _args, output, _idx=idx):
-                _captured[_idx] = output
-                return output
-            return _hook
-        _hooks.append(te.model.layers[k].register_forward_hook(_make_hook(k)))
+    target_layers = (9, 18, 27)
+    captured, handles = _capture_hooks(list(inner.layers), target_layers)
 
-    def _embed_one(prompt: str) -> torch.Tensor:
-        # Replicate Flux2KleinPipeline._get_qwen3_prompt_embeds but call the inner Qwen3Model
-        # directly (skip lm_head) and use the 3 per-layer hooks above. Returns (L, D) on cpu in `dtype`.
-        messages = [{"role": "user", "content": prompt}]
+    store_np = np_store_dtype(dtype)
+
+    def embed_one(prompt: str) -> torch.Tensor:
         text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False,
+            [{"role": "user", "content": prompt}],
+            tokenize=False,
+            add_generation_prompt=True,
+            enable_thinking=False,
         )
         inputs = tokenizer(
             text, return_tensors="pt", padding="max_length", truncation=True, max_length=512,
         )
-        input_ids = inputs["input_ids"].to(enc_device)
-        attention_mask = inputs["attention_mask"].to(enc_device)
-        _captured.clear()
+        input_ids = inputs["input_ids"].to("cuda")
+        attention_mask = inputs["attention_mask"].to("cuda")
+        captured.clear()
         with torch.no_grad():
-            te.model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                use_cache=False,
-            )
-        stacked = torch.stack([_captured[k] for k in hidden_states_layers], dim=1)  # (1, 3, L, H)
-        stacked = stacked.to(dtype=dtype, device=enc_device)
-        b, c, l, h = stacked.shape
-        e = stacked.permute(0, 2, 1, 3).reshape(b, l, c * h)  # (1, L, 3H)
-        return e[0].detach().to("cpu", dtype=dtype)  # (L, D)
+            inner(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
+        stacked = torch.stack([captured[k] for k in target_layers], dim=1).to(dtype=dtype, device="cuda")
+        b, c, seq, h = stacked.shape
+        return stacked.permute(0, 2, 1, 3).reshape(b, seq, c * h)[0].to("cpu", dtype=dtype)
 
-    # Compute the first prompt to learn (L, D), then create the memmap file, then stream the rest.
-    first = _embed_one(prompts[0])
+    first = embed_one(prompts[0])
     L, D = first.shape
-    N = len(prompts)
-    mm = np.lib.format.open_memmap(cache_path, mode="w+", dtype=store_np, shape=(N, L, D))
-    mm[0] = _embed_to_nprow(first, store_np, dtype)
+    mm = np.lib.format.open_memmap(cache_path, mode="w+", dtype=store_np, shape=(len(prompts), L, D))
+    mm[0] = tensor_to_nprow(first, dtype)
     del first
-    for i in range(1, N):
-        e = _embed_one(prompts[i])
-        mm[i] = _embed_to_nprow(e, store_np, dtype)
-        del e
+    for i in range(1, len(prompts)):
+        mm[i] = tensor_to_nprow(embed_one(prompts[i]), dtype)
         if i % 50 == 0:
             mm.flush()
     mm.flush()
     del mm
 
-    for h in _hooks:
+    for h in handles:
         h.remove()
-    del _hooks, _captured
-
-    log.info("Releasing Qwen3 from RAM...")
     del te
     gc.collect()
 
 
-def _memmap_is_valid(mm: np.ndarray, chunk: int = 64) -> bool:
-    """A valid embedding memmap should have no all-zero rows. Check in chunks so we don't
-    page the whole multi-GB file into RAM at once."""
-    N = mm.shape[0]
-    for start in range(0, N, chunk):
-        rows = mm[start:start + chunk]
-        ok = np.any(rows, axis=(1, 2))
+def memmap_is_valid(mm: np.ndarray, chunk: int = 64) -> bool:
+    for start in range(0, mm.shape[0], chunk):
+        ok = np.any(mm[start:start + chunk], axis=(1, 2))
         if not ok.all():
             bad = (np.where(~ok)[0] + start).tolist()
-            log.warning(
-                "Memmap has %d all-zero row(s) (first bad indices: %s); treating as incomplete.",
-                len(bad), bad[:5],
-            )
+            log.warning("Memmap has zero rows (first bad: %s); recomputing.", bad[:5])
             return False
     return True
 
 
+def convert_legacy_cache(legacy: Path, cache: Path, dtype: torch.dtype):
+    log.info("Converting legacy .pt cache %s -> %s", legacy.name, cache.name)
+    data = torch.load(legacy, map_location="cpu", mmap=True, weights_only=False)
+    embeds = data["embeds"]
+    first = embeds[0]
+    L, D = first.shape[1], first.shape[2]
+    store_np = np_store_dtype(dtype)
+    mm = np.lib.format.open_memmap(cache, mode="w+", dtype=store_np, shape=(len(embeds), L, D))
+    for i, e in enumerate(tqdm(embeds, desc="convert embeds", unit="row")):
+        mm[i] = tensor_to_nprow(e[0].to(dtype), dtype)
+    mm.flush()
+    del mm, data, embeds
+    gc.collect()
+
+
 def load_or_compute_embeds(model_id: str, out: str, prompts: list[str], dtype: torch.dtype):
-    """Return (numpy memmap (N,L,D) read-only, tokenizer). Builds the memmap from Qwen3 if
-    absent, or converts a legacy `.pt` cache if present. Never holds the full embedding set in
-    RAM after this returns — the caller indexes row i, paging in only that ~6 MB slice."""
     from transformers import AutoTokenizer
 
-    tok = AutoTokenizer.from_pretrained(model_id, subfolder="tokenizer")
+    tokenizer = AutoTokenizer.from_pretrained(model_id, subfolder="tokenizer")
     cache = embed_cache_path(out, model_id, prompts)
 
     if cache.exists():
         mm = np.lib.format.open_memmap(cache, mode="r")
-        if _memmap_is_valid(mm):
-            log.info("Found memmap embeddings: %s -> opening read-only (lazy paging)", cache)
-            return mm, tok
-        log.warning("Existing memmap %s is incomplete; deleting and recomputing.", cache.name)
+        if memmap_is_valid(mm):
+            log.info("Using cached embeddings: %s", cache)
+            return mm, tokenizer
         del mm
         cache.unlink()
 
@@ -365,115 +251,58 @@ def load_or_compute_embeds(model_id: str, out: str, prompts: list[str], dtype: t
 
     legacy = embed_legacy_cache_path(out, model_id, prompts)
     if legacy.exists():
-        log.info("Converting legacy .pt cache %s -> memmap %s (no Qwen3 recompute)...", legacy.name, cache.name)
-        data = torch.load(legacy, map_location="cpu", mmap=True, weights_only=False)
-        embeds_list = data["embeds"]
-        N = len(embeds_list)
-        first = embeds_list[0]  # (1, L, D)
-        L, D = first.shape[1], first.shape[2]
-        store_np = _np_store_dtype(dtype)
-        mm = np.lib.format.open_memmap(cache, mode="w+", dtype=store_np, shape=(N, L, D))
-        for i, e in enumerate(tqdm(embeds_list, desc="convert embeds", unit="row")):
-            mm[i] = _embed_to_nprow(e[0].to(dtype), store_np, dtype)
-        mm.flush()
-        del mm, data, embeds_list
-        gc.collect()
-        return np.lib.format.open_memmap(cache, mode="r"), tok
+        convert_legacy_cache(legacy, cache, dtype)
+        return np.lib.format.open_memmap(cache, mode="r"), tokenizer
 
-    precompute_prompt_embeds(model_id, prompts, dtype, cache, tok)
-    return np.lib.format.open_memmap(cache, mode="r"), tok
-
-
-def _module_size_mb(m: torch.nn.Module) -> float:
-    return sum(p.numel() * p.element_size() for p in m.parameters()) / 1e6
+    precompute_prompt_embeds(model_id, prompts, dtype, cache, tokenizer)
+    return np.lib.format.open_memmap(cache, mode="r"), tokenizer
 
 
 def apply_partial_pin(pipe, vram_margin_gb: float = 1.2):
-    """Pin VAE + small transformer modules + all double-stream blocks + as many single-stream
-    blocks as fit in VRAM on cuda permanently; offload the remaining single blocks one-at-a-time
-    via pre/post-forward hooks (cuda -> compute -> cpu).
-
-    The latent tensor is created on cuda by the pipeline (via our overridden _execution_device)
-    and only dtype-cast during the denoising loop, so it stays on cuda throughout. Pinned blocks
-    run with zero PCIe transfer. Each offloaded block is moved to cuda in its pre-hook, computes
-    on the cuda latent, and is moved back to cpu in its post-hook — so at most one offloaded
-    block (~245 MB) is on the GPU at any instant. Lossless: identical fp16 weights, just placed
-    to minimize transfers. Do NOT also call enable_sequential_cpu_offload (it would re-hook every
-    submodule and yank pinned blocks back to cpu)."""
     cuda = torch.device("cuda")
     transformer = pipe.transformer
 
-    # 1. VAE on cuda (small, ~200 MB; used for encode/decode, must match latent device).
     pipe.vae.to(cuda)
+    pinned_mb = module_size_mb(pipe.vae)
 
-    # 2. Small transformer modules on cuda (embedders, modulations, norm/proj — ~273 MB total).
-    small_names = [
+    small_modules = [
         "pos_embed", "time_guidance_embed",
         "double_stream_modulation_img", "double_stream_modulation_txt",
         "single_stream_modulation", "x_embedder", "context_embedder",
         "norm_out", "proj_out",
     ]
-    pinned_mb = _module_size_mb(pipe.vae)
-    for name in small_names:
-        mod = getattr(transformer, name)
-        mod.to(cuda)
-        pinned_mb += _module_size_mb(mod)
+    for name in small_modules:
+        getattr(transformer, name).to(cuda)
+        pinned_mb += module_size_mb(getattr(transformer, name))
 
-    # 3. All double-stream blocks on cuda (5 x ~491 MB = ~2454 MB).
-    for blk in transformer.transformer_blocks:
-        blk.to(cuda)
-        pinned_mb += _module_size_mb(blk)
+    for block in transformer.transformer_blocks:
+        block.to(cuda)
+        pinned_mb += module_size_mb(block)
 
-    # 4. Pin as many single-stream blocks as fit; offload the rest.
     single_blocks = transformer.single_transformer_blocks
-    n_single = len(single_blocks)
-    single_mb = _module_size_mb(single_blocks[0]) if n_single else 0.0
-    free_b, _ = torch.cuda.mem_get_info(cuda)
-    free_gb = free_b / 1e9
+    single_mb = module_size_mb(single_blocks[0]) if single_blocks else 0.0
+    free_gb = free_vram_gb(cuda)
     budget_gb = free_gb - vram_margin_gb
-    n_pin = max(0, min(n_single, int(budget_gb * 1e3 / single_mb))) if single_mb else n_single
-    n_off = n_single - n_pin
+    n_pin = max(0, min(len(single_blocks), int(budget_gb * 1e3 / single_mb))) if single_mb else len(single_blocks)
+
     log.info(
-        "partial-pin: VRAM free=%.2f GB, margin=%.1f GB -> pin %d/%d single blocks (%.0f MB), "
-        "offload %d (~%.0f MB PCIe/step each). Total pinned ~= %.2f GB.",
-        free_gb, vram_margin_gb, n_pin, n_single, n_pin * single_mb, n_off, single_mb, pinned_mb / 1e3,
+        "partial-pin: free=%.2f GB, margin=%.1f GB -> pin %d/%d single blocks (%.0f MB), offload %d.",
+        free_gb, vram_margin_gb, n_pin, len(single_blocks), n_pin * single_mb,
+        len(single_blocks) - n_pin,
     )
 
-    offloaded = []
-    for i, blk in enumerate(single_blocks):
+    for i, block in enumerate(single_blocks):
         if i < n_pin:
-            blk.to(cuda)
-            pinned_mb += _module_size_mb(blk)
+            block.to(cuda)
+            pinned_mb += module_size_mb(block)
         else:
-            offloaded.append(blk)
-
-    # 5. Hook each offloaded block: move to cuda before forward, back to cpu after.
-    #    Inputs (latent) are already on cuda; we only move the block's own weights. The output
-    #    tensor stays on cuda (post-hook returns it unchanged; only the module moves to cpu).
-    for blk in offloaded:
-        def _pre(module, _args, _cuda=cuda):
-            module.to(_cuda)
-            return None
-
-        def _post(module, _args, output, _cuda=cuda):
-            module.to("cpu")
-            return output
-
-        blk.register_forward_pre_hook(_pre)
-        blk.register_forward_hook(_post)
+            _offload_hooks(block, cuda, torch.device("cpu"))
 
     torch.cuda.empty_cache()
-    return n_pin, n_off
+    return n_pin, len(single_blocks) - n_pin
 
 
-def build_pipeline(
-    model_id: str, dtype: torch.dtype, tokenizer, pin_policy: str, vram_margin: float,
-):
-    """Flux2KleinPipeline with an fp16 transformer (from --model's `transformer/` subfolder).
-    Lossless.
-
-    pin_policy='partial'    -> apply_partial_pin (default; ~3x less PCIe traffic than sequential).
-    pin_policy='sequential' -> enable_sequential_cpu_offload (one module on GPU at a time, slow)."""
+def build_pipeline(model_id: str, dtype: torch.dtype, tokenizer, pin_policy: str, vram_margin: float):
     from diffusers import (
         AutoencoderKLFlux2,
         Flux2KleinPipeline,
@@ -490,70 +319,63 @@ def build_pipeline(
         def device(self):
             return torch.device("cuda")
 
-    # Dummy stand-in for the text encoder (Qwen3 replaced by precomputed embeds). Must expose
-    # `.dtype` so pipeline-level `.to()` / enable_sequential_cpu_offload (which reads
-    # module.dtype on every submodule) doesn't raise AttributeError like a plain nn.Linear would.
-    class _DummyTextEncoder(torch.nn.Module):
-        dtype = torch.float32  # only used for the dtype guard in pipeline.to(); no real params
+    class DummyTextEncoder(torch.nn.Module):
+        dtype = torch.float32
+
         def forward(self, *args, **kwargs):
             return None
 
-    dummy_te = _DummyTextEncoder()
-
     scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(model_id, subfolder="scheduler")
-
-    log.info("Loading Flux2Transformer2DModel fp16 (unquantized, ~8 GB RAM)...")
     transformer = Flux2Transformer2DModel.from_pretrained(
         model_id, subfolder="transformer", torch_dtype=dtype,
     )
-    vae = AutoencoderKLFlux2.from_pretrained(
-        model_id, subfolder="vae", torch_dtype=torch.float16
-    )
+    vae = AutoencoderKLFlux2.from_pretrained(model_id, subfolder="vae", torch_dtype=torch.float16)
 
     pipe = Flux2KleinPipelineFixed(
-        scheduler=scheduler, vae=vae, text_encoder=dummy_te,
-        tokenizer=tokenizer, transformer=transformer, is_distilled=True,
+        scheduler=scheduler,
+        vae=vae,
+        text_encoder=DummyTextEncoder(),
+        tokenizer=tokenizer,
+        transformer=transformer,
+        is_distilled=True,
     )
 
     if pin_policy == "partial":
         apply_partial_pin(pipe, vram_margin_gb=vram_margin)
     else:
-        log.info("enable_sequential_cpu_offload (one layer on GPU at a time, slow)...")
+        log.info("Sequential offload enabled (slow).")
         pipe.enable_sequential_cpu_offload(device=torch.device("cuda"))
-    torch.cuda.empty_cache()
 
+    torch.cuda.empty_cache()
     return pipe
 
 
 def image_name(prefix: str, i: int) -> str:
-    """Build output image filename from optional prefix and index."""
     return f"{prefix}img_{i:04d}.png"
 
 
 def find_completed(out_dir: Path, prefix: str, n: int) -> set[int]:
-    """Return indices i in [0, n) whose output image exists in out_dir."""
-    done = set()
-    for i in range(n):
-        if (out_dir / image_name(prefix, i)).exists():
-            done.add(i)
-    return done
+    return {i for i in range(n) if (out_dir / image_name(prefix, i)).exists()}
 
 
-def backfill_manifest(out_dir: Path, prompts: list[str], done: set[int], manifest: Path):
-    """Ensure every done image has a manifest entry (append any that are missing). Returns the
-    set of indices that already had manifest entries."""
+def backfill_manifest(
+    out_dir: Path,
+    prefix: str,
+    prompts: list[str],
+    done: set[int],
+    manifest: Path,
+) -> set[int]:
     have = set()
     if manifest.exists():
-        with manifest.open("r", encoding="utf-8") as mf:
-            for line in mf:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                    have.add(int(rec["index"]))
-                except (json.JSONDecodeError, KeyError, ValueError):
-                    continue  # skip corrupt/partial lines
+        for line in manifest.read_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                have.add(int(json.loads(line)["index"]))
+            except (json.JSONDecodeError, KeyError, ValueError):
+                continue
+
     missing = sorted(done - have)
     if missing:
         with manifest.open("a", encoding="utf-8") as mf:
@@ -564,74 +386,79 @@ def backfill_manifest(out_dir: Path, prompts: list[str], done: set[int], manifes
     return have
 
 
+def generate_one(
+    pipe,
+    embeds_mm: np.ndarray,
+    dtype: torch.dtype,
+    prompt: str,
+    i: int,
+    seed: int,
+    size: int,
+    steps: int,
+    guidance: float,
+):
+    generator = torch.Generator(device="cuda").manual_seed(seed + i)
+    prompt_embeds = nprow_to_tensor(embeds_mm[i:i + 1], dtype).to("cuda")
+    t0 = time.time()
+    try:
+        img = pipe(
+            prompt=None,
+            prompt_embeds=prompt_embeds,
+            height=size,
+            width=size,
+            num_inference_steps=steps,
+            guidance_scale=guidance,
+            generator=generator,
+        ).images[0]
+    except torch.cuda.OutOfMemoryError as exc:
+        log.error("OOM on prompt %d (%.1fs): %s", i, time.time() - t0, exc)
+        torch.cuda.empty_cache()
+        raise
+    return img, time.time() - t0
+
+
 def main() -> int:
     a = parse_args()
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[a.dtype]
+    dtype = torch_dtype(a.dtype)
     prompts = load_prompts(a.prompts, a.limit)
     if not prompts:
-        log.error("no prompts loaded from %s", a.prompts)
+        log.error("No prompts loaded from %s", a.prompts)
         return 2
-    log.info("Loaded %d prompts from %s", len(prompts), a.prompts)
 
-    embeds_mm, tok = load_or_compute_embeds(a.model, a.out, prompts, dtype)
+    embeds_mm, tokenizer = load_or_compute_embeds(a.model, a.out, prompts, dtype)
     if embeds_mm.shape[0] != len(prompts):
-        log.error("embed cache has %d rows but %d prompts were loaded", embeds_mm.shape[0], len(prompts))
+        log.error("Embed cache has %d rows but %d prompts loaded", embeds_mm.shape[0], len(prompts))
         return 2
-    log.info("Embeddings memmap: shape=%s dtype=%s (read-only, paged per image)", embeds_mm.shape, embeds_mm.dtype)
 
-    # --- resume: skip images whose PNG already exists ---
     done = set() if a.restart else find_completed(out_dir, a.prefix, len(prompts))
     manifest = out_dir / "manifest.jsonl"
     if done:
         backfill_manifest(out_dir, a.prefix, prompts, done, manifest)
-        log.info("Resume: %d/%d images already present -> skipping them.", len(done), len(prompts))
+        log.info("Resume: %d/%d images already present.", len(done), len(prompts))
         if len(done) == len(prompts):
-            log.info("All %d images already generated. Nothing to do.", len(prompts))
+            log.info("All images already generated.")
             return 0
-    else:
-        log.info("Starting from scratch (no existing images in %s).", out_dir)
 
-    pipe = build_pipeline(
-        a.model, dtype, tok,
-        pin_policy=a.pin_policy, vram_margin=a.vram_margin,
-    )
+    pipe = build_pipeline(a.model, dtype, tokenizer, a.pin_policy, a.vram_margin)
 
     with manifest.open("a", encoding="utf-8") as mf:
         todo = [i for i in range(len(prompts)) if i not in done]
         for i in tqdm(todo, total=len(todo), desc="generate", unit="img"):
-            prompt = prompts[i]
-            # Independent per-image generator (seed + i) so a resumed run reproduces the same
-            # noise per image as a fresh run — resume is bit-identical to never having stopped.
-            gen = torch.Generator(device="cuda").manual_seed(a.seed + i)
-            # Index row i of the memmap -> only that ~6 MB page is faulted into RAM, then
-            # copied to cuda. The other rows stay on disk; pinned transformer blocks stay on
-            # the GPU; only the offloaded single blocks shuttle across PCIe.
-            pe_cuda = _row_to_torch(embeds_mm[i:i + 1], dtype).to("cuda")
-            t0 = time.time()
-            try:
-                img = pipe(
-                    prompt=None, prompt_embeds=pe_cuda,
-                    height=a.size, width=a.size,
-                    num_inference_steps=a.steps, guidance_scale=a.guidance,
-                    generator=gen,
-                ).images[0]
-            except torch.cuda.OutOfMemoryError as e:
-                log.error("OOM on prompt %d (%.1fs): %s", i, time.time() - t0, e)
-                torch.cuda.empty_cache()
-                return 3
+            img, dt = generate_one(
+                pipe, embeds_mm, dtype, prompts[i], i, a.seed, a.size, a.steps, a.guidance,
+            )
             path = out_dir / image_name(a.prefix, i)
             img.save(path)
-            mf.write(json.dumps({"index": i, "image": str(path), "prompt": prompt}) + "\n")
+            mf.write(json.dumps({"index": i, "image": str(path), "prompt": prompts[i]}) + "\n")
             mf.flush()
-            dt = time.time() - t0
             tqdm.write(f"  saved {path.name} ({dt:.1f}s)")
-            del pe_cuda, gen, img
+            del img
             torch.cuda.empty_cache()
 
-    log.info("Done. %d images in %s (manifest: %s)", len(prompts), out_dir, manifest)
+    log.info("Done. %d images in %s", len(prompts), out_dir)
     return 0
 
 

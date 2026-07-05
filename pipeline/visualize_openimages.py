@@ -1,24 +1,15 @@
 #!/usr/bin/env python3
-"""Visualize YOLO labels for a folder of real images (e.g. Open Images validation).
-
-Reads images from --images and matching YOLO .txt labels from --labels, draws the boxes,
-and writes overlaid copies to --out. Useful for sanity-checking manually corrected boxes.
-
-Usage:
-  python pipeline/visualize_openimages.py \
-      --images data/openimages_val/images \
-      --labels data/openimages_val/labels \
-      --out data/openimages_val/visuals
-"""
+"""Visualize YOLO labels for a folder of real images (e.g. Open Images validation)."""
 from __future__ import annotations
 
 import argparse
-import colorsys
 import json
 import logging
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+
+from pipeline.utils import palette
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s :: %(message)s")
 log = logging.getLogger("visualize_openimages")
@@ -28,26 +19,15 @@ IMG_SUFFIXES = (".jpg", ".jpeg", ".png")
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Overlay YOLO boxes on real images.")
-    p.add_argument("--images", required=True, help="directory of images")
-    p.add_argument("--labels", required=True, help="directory of YOLO .txt labels")
-    p.add_argument("--out", required=True, help="output directory for overlaid images")
-    p.add_argument("--limit", type=int, default=0, help="0 = all; else first N")
+    p.add_argument("--images", required=True)
+    p.add_argument("--labels", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--limit", type=int, default=0)
     p.add_argument("--box-width", type=int, default=3)
-    p.add_argument("--alpha", type=int, default=110, help="unused, kept for consistency")
     return p.parse_args()
 
 
-def palette(n: int) -> list[tuple[int, int, int]]:
-    out = []
-    for i in range(max(n, 1)):
-        h = (i / max(n, 1)) % 1.0
-        r, g, b = colorsys.hsv_to_rgb(h, 0.85, 0.95)
-        out.append((int(r * 255), int(g * 255), int(b * 255)))
-    return out
-
-
 def load_boxes(label_path: Path, w: int, h: int) -> list[tuple[int, int, int, int]]:
-    """Convert YOLO normalized boxes to pixel xyxy."""
     boxes = []
     if not label_path.exists():
         return boxes
@@ -74,25 +54,30 @@ def load_boxes(label_path: Path, w: int, h: int) -> list[tuple[int, int, int, in
     return boxes
 
 
-def render(image_path: Path, boxes: list, box_width: int) -> Image.Image:
-    img = Image.open(image_path).convert("RGB")
-    draw = ImageDraw.Draw(img)
-    cols = palette(max(len(boxes), 1))
+def text_size(draw: ImageDraw.ImageDraw, label: str, font: ImageFont.FreeTypeFont | None):
     try:
-        font = ImageFont.load_default()
-    except Exception:  # noqa: BLE001
-        font = None
+        return draw.textbbox((0, 0), label, font=font)[2:]
+    except Exception:
+        return 14, 11
+
+
+def draw_boxes(draw: ImageDraw.ImageDraw, boxes: list, box_width: int):
+    font = ImageFont.load_default()
+    cols = palette(max(len(boxes), 1))
     for i, (x1, y1, x2, y2) in enumerate(boxes):
         c = cols[i % len(cols)]
         draw.rectangle([x1, y1, x2, y2], outline=c, width=box_width)
         label = f"{i + 1}"
-        try:
-            tw, th = draw.textbbox((0, 0), label, font=font)[2:]
-        except Exception:  # noqa: BLE001
-            tw, th = 14, 11
+        tw, th = text_size(draw, label, font)
         ty = max(0, y1 - 12)
         draw.rectangle([x1, ty, x1 + tw + 4, ty + th + 2], fill=c)
         draw.text((x1 + 2, ty), label, fill=(0, 0, 0), font=font)
+
+
+def render(image_path: Path, boxes: list, box_width: int) -> Image.Image:
+    img = Image.open(image_path).convert("RGB")
+    draw = ImageDraw.Draw(img)
+    draw_boxes(draw, boxes, box_width)
     return img
 
 
@@ -107,7 +92,7 @@ def main() -> int:
     if a.limit > 0:
         images = images[:a.limit]
     if not images:
-        log.error("no images found in %s", img_dir)
+        log.error("No images found in %s", img_dir)
         return 2
 
     log.info("Rendering %d images from %s -> %s", len(images), img_dir, out_dir)
@@ -120,8 +105,8 @@ def main() -> int:
             log.info("%s: %d box(es)", img_path.name, len(boxes))
             try:
                 rendered = render(img_path, boxes, a.box_width)
-            except Exception as e:  # noqa: BLE001
-                log.error("failed to render %s: %s", img_path.name, e)
+            except Exception as exc:
+                log.error("failed to render %s: %s", img_path.name, exc)
                 continue
             dst = out_dir / (img_path.stem + ".png")
             rendered.save(dst)
@@ -134,7 +119,7 @@ def main() -> int:
             ix.flush()
             n_ok += 1
 
-    log.info("Done. %d/%d visuals written to %s (index: %s)", n_ok, len(images), out_dir, index)
+    log.info("Done. %d/%d visuals written to %s", n_ok, len(images), out_dir)
     return 0
 
 

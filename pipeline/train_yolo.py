@@ -23,16 +23,30 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--val-images", default=None)
     p.add_argument("--val-labels", default=None)
     p.add_argument("--out", required=True)
-    p.add_argument("--base", default="yolov8n.pt")
+    p.add_argument("--base", default="yolo26n.pt")
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--patience", type=int, default=50)
-    p.add_argument("--imgsz", type=int, default=640)
-    p.add_argument("--batch", type=int, default=16)
+    p.add_argument("--imgsz", type=int, default=768)
+    p.add_argument("--batch", type=int, default=8)
     p.add_argument("--device", default="0")
     p.add_argument("--val-frac", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--allow-dummy-labels", action="store_true")
     p.add_argument("--dry-run", action="store_true")
+    # loss / head overrides for single-class detection
+    p.add_argument("--single-cls", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--box", type=float, default=10.0)
+    p.add_argument("--cls", type=float, default=0.3)
+    p.add_argument("--cls-pw", type=float, default=1.0)
+    p.add_argument("--dfl", type=float, default=2.5)
+    # augmentation overrides (still goes through YOLO's own aug pipeline)
+    p.add_argument("--scale", type=float, default=0.4)
+    p.add_argument("--translate", type=float, default=0.15)
+    p.add_argument("--hsv-v", type=float, default=0.5)
+    p.add_argument("--mosaic", type=float, default=0.5)
+    p.add_argument("--closemosaic", type=int, default=20)
+    p.add_argument("--mixup", type=float, default=0.1)
+    p.add_argument("--copy-paste", type=float, default=0.1)
     return p.parse_args()
 
 
@@ -212,6 +226,18 @@ def main() -> int:
         name="train",
         exist_ok=True,
         verbose=True,
+        single_cls=a.single_cls,
+        box=a.box,
+        cls=a.cls,
+        cls_pw=a.cls_pw,
+        dfl=a.dfl,
+        scale=a.scale,
+        translate=a.translate,
+        hsv_v=a.hsv_v,
+        mosaic=a.mosaic,
+        close_mosaic=a.closemosaic,
+        mixup=a.mixup,
+        copy_paste=a.copy_paste,
     )
     log.info("Done. Weights under %s/runs/train/", out)
     return 0

@@ -159,32 +159,44 @@ tasks:
     desc: "Step 5: assemble single-class YOLO dataset (from data/images_pp/) + fine-tune"
     cmds:
       - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
-        --out data/dataset --base models/yolov8n.pt --epochs 50 --imgsz 640 --batch 16"
+        --out data/dataset --base models/yolo26n.pt --epochs 50"
 
   train-real-val:
     desc: "Step 5: train on synthetic, validate on real Open Images Wrench"
     cmds:
       - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
         --val-images data/openimages_val/images --val-labels data/openimages_val/labels \
-        --out data/dataset --base models/yolov8n.pt --epochs 500 --patience 15 --imgsz 640 --batch 16"
+        --out data/dataset --base models/yolo26n.pt --epochs 500 --patience 15"
 
   train-test:
     desc: "Step 5 (test): 1-epoch smoke -> data/dataset/"
     cmds:
       - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
-        --out data/dataset --base models/yolov8n.pt --epochs 1 --imgsz 320 --batch 1 \
+        --out data/dataset --base models/yolo26n.pt --epochs 1 --imgsz 320 --batch 1 \
         --allow-dummy-labels"
 
   inference-train:
     desc: "Run trained model on the training set and save visualizations"
     cmds:
       - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
-        --source data/dataset/images/train --out data/inference_train"
+        --source data/dataset/images/train \
+        --gt-labels data/dataset/labels/train \
+        --out data/inference_train"
 
   inference-val:
     desc: "Run trained model on the validation set and save visualizations"
     cmds:
       - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
-        --source data/dataset/images/val --out data/inference_val"
+        --source data/dataset/images/val \
+        --gt-labels data/dataset/labels/val \
+        --out data/inference_val"
+
+  inference-openimages:
+    desc: "Run trained model on Open Images validation, compare to GT boxes"
+    cmds:
+      - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
+        --source data/openimages_val/images \
+        --gt-labels data/openimages_val/labels \
+        --out data/inference_openimages"
 
 

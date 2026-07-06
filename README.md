@@ -8,7 +8,7 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 
 | # | Task | What it does |
 |---|------|--------------|
-| 1 | `pipeline:generate` (`--test`) | Write N varied wrench prompts → `data/prompts/<mode>/prompts.txt` |
+| 1 | `pipeline:prompts` (`--test`) | Write N varied wrench prompts → `data/prompts/<mode>/prompts.txt` |
 | 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (fp16 + partial GPU pinning; Qwen3 embeds precomputed + cached) → `data/synthetic/images/` |
 | 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` + mask PNGs in `data/synthetic/labels/` |
 | 4 | `pipeline:visualize` (`visualize-test`) | Overlay segmentation + boxes on the images → `data/synthetic/visuals/` |
@@ -28,7 +28,7 @@ task env:setup          # venv + deps + fetch SAM 3 ckpt and CLIP BPE vocab
 task env:check         # show torch / CUDA availability
 
 # full pipeline (1000 prompts)
-task pipeline:generate
+task pipeline:prompts
 task pipeline:images
 task pipeline:label
 task pipeline:train

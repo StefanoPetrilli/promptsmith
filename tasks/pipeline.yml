@@ -4,8 +4,8 @@ version: "3"
 # Each step has a `*-test` task that runs on a handful of images for verification.
 # The test variants write to the SAME folders as the normal tasks (no `_test` dirs).
 #
-#   generate              step 1 — weighted-axis prompts -> data/prompts/<mode>/
-#   generate-test         step 1 — 3 prompts per leaf
+#   prompts               step 1 — weighted-axis prompts -> data/prompts/<mode>/
+#   prompts-test          step 1 — 3 prompts per leaf
 #   images                step 2 — FLUX.2-klein-4B render every leaf -> data/synthetic/images/
 #   images-test           step 2 — render first 3 prompts per leaf
 #   label                 step 3 — SAM 3 text-grounded wrench boxes -> data/synthetic/labels/
@@ -44,8 +44,8 @@ vars:
   N_TEST: "5"
 
 tasks:
-  generate:
-    desc: "Step 1: weighted-axis prompts -> data/prompts/<mode>/"
+  prompts:
+    desc: "Step 1: weighted-axis wrench prompts -> data/prompts/<mode>/"
     cmds:
       # clean_positive — isolated, fully-framed wrenches on simple backgrounds
       - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --n {{.N_CLEAN}} --out data/prompts"
@@ -57,7 +57,7 @@ tasks:
       - "{{.PY}} pipeline/generate_prompts.py --mode hard_negative --n {{.N_HARD_NEG}} --out data/prompts"
       - "{{.PY}} pipeline/generate_prompts.py --mode pure_negative --n {{.N_PURE_NEG}} --out data/prompts"
 
-  generate-test:
+  prompts-test:
     desc: "Step 1 (test): {{.N_TEST}} prompts per mode leaf"
     cmds:
       - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --n {{.N_TEST}} --out data/prompts"

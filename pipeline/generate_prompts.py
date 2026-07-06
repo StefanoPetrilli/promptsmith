@@ -14,7 +14,6 @@ if __package__ in (None, ""):
 from pipeline.combinations import (
     ARRANGEMENTS,
     CONFUSERS,
-    COUNT_WORDS,
     DISTANCES,
     ENVIRONMENTS,
     FINISHES,
@@ -46,14 +45,11 @@ def _weighted_choice(rng: random.Random, values: list[str], weights: list[float]
     return rng.choices(values, weights=weights, k=1)[0]
 
 
-def _plural(noun: str) -> str:
-    if noun.endswith(("s", "x", "ch", "sh")):
-        return noun + "es"
-    return noun + "s"
-
-
 def _article(noun: str) -> str:
-    return "" if noun.endswith("s") else "a "
+    # "a" / "an" by the first sound; bare for already-plural nouns ending in "s".
+    if noun.endswith("s"):
+        return ""
+    return "an " if noun[:1].lower() in "aeiou" else "a "
 
 
 def _join(parts: list[str]) -> str:
@@ -76,7 +72,7 @@ def _common_axes(rng: random.Random, mode: str) -> dict:
 
 
 def _object_phrase(subtype: str, finish: str) -> str:
-    return f"some {finish} {_plural(subtype)}"
+    return f"{_article(finish)}{finish} {subtype}"
 
 
 def _positive_text(framing: str, subtype: str, finish: str, ax: dict, neg: str) -> str:
@@ -126,18 +122,15 @@ def build_asset(rng: random.Random) -> str:
     ]))
 
 
-def _confuser_phrase(rng: random.Random, confuser: str) -> str:
-    count = rng.choice([1, 1, 1, 2, 2, 3])
-    if count == 1:
-        return f"{_article(confuser)}{confuser}"
-    return f"{COUNT_WORDS[count]} {_plural(confuser)}"
+def _confuser_phrase(confuser: str) -> str:
+    return f"{_article(confuser)}{confuser}"
 
 
 def build_hard_negative(rng: random.Random) -> str:
     confuser = rng.choice(CONFUSERS)
     ax = _common_axes(rng, "hard_positive")
     return _cap(_join([
-        _confuser_phrase(rng, confuser),
+        _confuser_phrase(confuser),
         f"{ax['arrangement']} on {ax['surface']} in {ax['scene']}",
         ax["distance"], ax["lighting"],
         "photorealistic",

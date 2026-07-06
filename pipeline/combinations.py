@@ -10,13 +10,10 @@ from __future__ import annotations
 WRENCH_TYPES = [
     "combination wrench",
     "crescent adjustable wrench",
-    "pipe wrench",
     "box-end wrench",
-    "ratcheting wrench",
     "stubby wrench",
     "flare-nut wrench",
     "open-end wrench",
-    "adjustable pipe wrench",
     "flex combination wrench"
 ]
 
@@ -95,8 +92,6 @@ LIGHTINGS = [
     "low light", "backlight", "mixed light", "direct sunlight",
     "overcast light", "swing-arm lamp", "LED strip", "ring light",
 ]
-
-COUNT_WORDS = {1: "a", 2: "two", 3: "three", 4: "four", 5: "five"}
 
 # --- negatives / non-wrench content ------------------------------------------
 

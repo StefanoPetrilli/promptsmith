@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--class-name", default="Wrench")
     p.add_argument("--split", default="validation", choices=SPLITS)
     p.add_argument("--out", required=True)
-    p.add_argument("--cache", default="data/.openimages_cache")
+    p.add_argument("--cache", default="data/openimages/cache")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--skip-group-of", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--skip-depiction", action=argparse.BooleanOptionalAction, default=True)

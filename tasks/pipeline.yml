@@ -6,16 +6,23 @@ version: "3"
 #
 #   generate              step 1 — weighted-axis prompts -> data/prompts/<mode>/
 #   generate-test         step 1 — 3 prompts per leaf
-#   images                step 2 — FLUX.2-klein-4B render every leaf -> data/images/
+#   images                step 2 — FLUX.2-klein-4B render every leaf -> data/synthetic/images/
 #   images-test           step 2 — render first 3 prompts per leaf
-#   label                 step 3 — SAM 3 text-grounded wrench boxes -> data/labels/
+#   label                 step 3 — SAM 3 text-grounded wrench boxes -> data/synthetic/labels/
 #   label-test            step 3 — label first 3 images per leaf
-#   postprocess           step 3.5 — Albumentations degradation -> data/images_pp/
+#   postprocess           step 3.5 — Albumentations degradation -> data/synthetic/images_pp/
 #   postprocess-test      step 3.5 — degrade first 3 images per leaf
-#   visualize             step 4 — overlay SAM 3 masks + boxes -> data/visuals/
+#   visualize             step 4 — overlay SAM 3 masks + boxes -> data/synthetic/visuals/
 #   visualize-test        step 4 — overlay first 3 images per leaf
 #   train                 step 5 — assemble dataset + fine-tune YOLO -> data/dataset/
 #   train-test            step 5 — 1-epoch smoke -> data/dataset/
+#
+# data/ layout:
+#   data/prompts/            stage 1 seed prompts
+#   data/synthetic/          stage 2-4 intermediates (images, images_pp, labels, visuals)
+#   data/openimages/         real-val set + metadata cache (images, labels, visuals, cache)
+#   data/dataset/            stage 5 assembled YOLO dataset + runs
+#   data/inference/          model inference outputs (train, val, openimages)
 
 vars:
   PY: .venv/bin/python
@@ -25,16 +32,16 @@ vars:
   STEPS: "8"
   # --- prompt counts per mode (tune the dataset size from here) --------------
   # clean_positive
-  N_CLEAN: "720"
+  N_CLEAN: "170"
   # hard_positive
-  N_HARD: "175"
+  N_HARD: "50"
   # asset
-  N_ASSET: "120"
+  N_ASSET: "10"
   # negatives
-  N_HARD_NEG: "200"
-  N_PURE_NEG: "150"
+  N_HARD_NEG: "50"
+  N_PURE_NEG: "20"
   # test variants
-  N_TEST: "3"
+  N_TEST: "5"
 
 tasks:
   generate:
@@ -60,84 +67,84 @@ tasks:
       - "{{.PY}} pipeline/generate_prompts.py --mode asset --n {{.N_TEST}} --out data/prompts"
 
   images:
-    desc: "Step 2: render every leaf prompt folder with FLUX.2-klein-4B -> data/images/"
+    desc: "Step 2: render every leaf prompt folder with FLUX.2-klein-4B -> data/synthetic/images/"
     cmds:
       - >-
         {{.PY}} pipeline/run_leaves.py
         --root data/prompts --marker prompts.txt
-        --out-root data/images --input-arg prompts
+        --out-root data/synthetic/images --input-arg prompts
         --script pipeline/generate_images.py
         --prefix {rel}_
         -- --model {{.MODEL}} --size {{.SIZE}} --steps {{.STEPS}}
 
   images-test:
-    desc: "Step 2 (test): render first 3 prompts per leaf -> data/images/"
+    desc: "Step 2 (test): render first 3 prompts per leaf -> data/synthetic/images/"
     cmds:
       - >-
         {{.PY}} pipeline/run_leaves.py
         --root data/prompts --marker prompts.txt
-        --out-root data/images --input-arg prompts
+        --out-root data/synthetic/images --input-arg prompts
         --script pipeline/generate_images.py
         --prefix {rel}_
         -- --model {{.MODEL}} --size {{.SIZE}} --steps {{.STEPS}} --limit 3
 
   label:
-    desc: "Step 3: label each leaf with SAM 3 (text 'wrench', conf>=0.55) -> data/labels/"
+    desc: "Step 3: label each leaf with SAM 3 (text 'wrench', conf>=0.55) -> data/synthetic/labels/"
     cmds:
       - >-
         {{.PY}} pipeline/run_leaves.py
-        --root data/images --marker manifest.jsonl
-        --out-root data/labels --input-arg images
+        --root data/synthetic/images --marker manifest.jsonl
+        --out-root data/synthetic/labels --input-arg images
         --script pipeline/label_images.py
         -- --model-path {{.SAM3_CKPT}} --confidence 0.55
 
   label-test:
-    desc: "Step 3 (test): label first 3 images per leaf -> data/labels/"
+    desc: "Step 3 (test): label first 3 images per leaf -> data/synthetic/labels/"
     cmds:
       - >-
         {{.PY}} pipeline/run_leaves.py
-        --root data/images --marker manifest.jsonl
-        --out-root data/labels --input-arg images
+        --root data/synthetic/images --marker manifest.jsonl
+        --out-root data/synthetic/labels --input-arg images
         --script pipeline/label_images.py
         -- --model-path {{.SAM3_CKPT}} --confidence 0.55 --limit 3
 
   postprocess:
-    desc: "Step 3.5: deterministic Albumentations degradation -> data/images_pp/"
+    desc: "Step 3.5: deterministic Albumentations degradation -> data/synthetic/images_pp/"
     cmds:
       - >-
         {{.PY}} pipeline/run_leaves.py
-        --root data/images --marker manifest.jsonl
-        --out-root data/images_pp --input-arg images
+        --root data/synthetic/images --marker manifest.jsonl
+        --out-root data/synthetic/images_pp --input-arg images
         --script pipeline/postprocess_images.py
         --
 
   postprocess-test:
-    desc: "Step 3.5 (test): degrade first 3 images per leaf -> data/images_pp/"
+    desc: "Step 3.5 (test): degrade first 3 images per leaf -> data/synthetic/images_pp/"
     cmds:
       - >-
         {{.PY}} pipeline/run_leaves.py
-        --root data/images --marker manifest.jsonl
-        --out-root data/images_pp --input-arg images
+        --root data/synthetic/images --marker manifest.jsonl
+        --out-root data/synthetic/images_pp --input-arg images
         --script pipeline/postprocess_images.py
         -- --limit 3
 
   visualize:
-    desc: "Step 4: overlay SAM 3 segmentation + boxes on all images -> data/visuals/"
+    desc: "Step 4: overlay SAM 3 segmentation + boxes on all images -> data/synthetic/visuals/"
     cmds:
       - >-
         {{.PY}} pipeline/run_leaves.py
-        --root data/labels --marker labels.jsonl
-        --out-root data/visuals --input-arg labels
+        --root data/synthetic/labels --marker labels.jsonl
+        --out-root data/synthetic/visuals --input-arg labels
         --script pipeline/visualize_labels.py
         --
 
   visualize-test:
-    desc: "Step 4 (test): overlay first 3 images per leaf -> data/visuals/"
+    desc: "Step 4 (test): overlay first 3 images per leaf -> data/synthetic/visuals/"
     cmds:
       - >-
         {{.PY}} pipeline/run_leaves.py
-        --root data/labels --marker labels.jsonl
-        --out-root data/visuals --input-arg labels
+        --root data/synthetic/labels --marker labels.jsonl
+        --out-root data/synthetic/visuals --input-arg labels
         --script pipeline/visualize_labels.py
         -- --limit 3
 
@@ -145,33 +152,33 @@ tasks:
     desc: "Download Open Images Wrench real images as val data (uses train split; validation/test have <2 images)"
     cmds:
       - "{{.PY}} pipeline/download_openimages.py --class-name Wrench --split train \
-        --out data/openimages_val --limit 500"
+        --out data/openimages --limit 500"
 
   visualize-openimages:
-    desc: "Overlay YOLO boxes on Open Images validation set -> data/openimages_val/visuals/"
+    desc: "Overlay YOLO boxes on Open Images validation set -> data/openimages/visuals/"
     cmds:
       - "{{.PY}} pipeline/visualize_labels.py --format yolo \
-        --images data/openimages_val/images \
-        --labels data/openimages_val/labels \
-        --out data/openimages_val/visuals"
+        --images data/openimages/images \
+        --labels data/openimages/labels \
+        --out data/openimages/visuals"
 
   train:
-    desc: "Step 5: assemble single-class YOLO dataset (from data/images_pp/) + fine-tune"
+    desc: "Step 5: assemble single-class YOLO dataset (from data/synthetic/images_pp/) + fine-tune"
     cmds:
-      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
+      - "{{.PY}} pipeline/train_yolo.py --images data/synthetic/images --labels data/synthetic/labels \
         --out data/dataset --base models/yolo26n.pt --epochs 50"
 
   train-real-val:
     desc: "Step 5: train on synthetic, validate on real Open Images Wrench"
     cmds:
-      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
-        --val-images data/openimages_val/images --val-labels data/openimages_val/labels \
+      - "{{.PY}} pipeline/train_yolo.py --images data/synthetic/images --labels data/synthetic/labels \
+        --val-images data/openimages/images --val-labels data/openimages/labels \
         --out data/dataset --base models/yolo26n.pt --epochs 500 --patience 15"
 
   train-test:
     desc: "Step 5 (test): 1-epoch smoke -> data/dataset/"
     cmds:
-      - "{{.PY}} pipeline/train_yolo.py --images data/images --labels data/labels \
+      - "{{.PY}} pipeline/train_yolo.py --images data/synthetic/images --labels data/synthetic/labels \
         --out data/dataset --base models/yolo26n.pt --epochs 1 --imgsz 320 --batch 1 \
         --allow-dummy-labels"
 
@@ -181,7 +188,7 @@ tasks:
       - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
         --source data/dataset/images/train \
         --gt-labels data/dataset/labels/train \
-        --out data/inference_train"
+        --out data/inference/train"
 
   inference-val:
     desc: "Run trained model on the validation set and save visualizations"
@@ -189,14 +196,12 @@ tasks:
       - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
         --source data/dataset/images/val \
         --gt-labels data/dataset/labels/val \
-        --out data/inference_val"
+        --out data/inference/val"
 
   inference-openimages:
     desc: "Run trained model on Open Images validation, compare to GT boxes"
     cmds:
       - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
-        --source data/openimages_val/images \
-        --gt-labels data/openimages_val/labels \
-        --out data/inference_openimages"
-
-
+        --source data/openimages/images \
+        --gt-labels data/openimages/labels \
+        --out data/inference/openimages"

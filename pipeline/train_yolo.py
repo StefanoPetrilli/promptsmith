@@ -59,7 +59,7 @@ def symlink(src: Path, dst: Path) -> None:
 def resolve_images(images: Path, images_pp: Path | None) -> Path:
     if images_pp is not None:
         return images_pp
-    pp = Path("data/images_pp")
+    pp = Path("data/synthetic/images_pp")
     return pp if pp.exists() else images
 
 

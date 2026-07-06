@@ -8,12 +8,12 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 
 | # | Task | What it does |
 |---|------|--------------|
-| 1 | `pipeline:generate` (`--test`) | Write N varied wrench prompts → `data/prompts/<mode>/prompts.{jsonl,txt}` |
-| 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (fp16 + partial GPU pinning; Qwen3 embeds precomputed + cached) → `data/images/` |
-| 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` + mask PNGs |
-| 4 | `pipeline:visualize` (`visualize-test`) | Overlay segmentation + boxes on the images → `data/visuals/` |
+| 1 | `pipeline:generate` (`--test`) | Write N varied wrench prompts → `data/prompts/<mode>/prompts.txt` |
+| 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (fp16 + partial GPU pinning; Qwen3 embeds precomputed + cached) → `data/synthetic/images/` |
+| 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` + mask PNGs in `data/synthetic/labels/` |
+| 4 | `pipeline:visualize` (`visualize-test`) | Overlay segmentation + boxes on the images → `data/synthetic/visuals/` |
 | 5 | `pipeline:train` (`train-test`) | Assemble train/val split + fine-tune **YOLOv8n** → `data/dataset/runs/` |
-|   | `pipeline:download-openimages` | Download real **Open Images** wrench images for validation → `data/openimages_val/` |
+|   | `pipeline:download-openimages` | Download real **Open Images** wrench images for validation → `data/openimages/` |
 |   | `pipeline:train-real-val` | Train on synthetic images, validate on real Open Images |
 
 Each `*-test` variant runs on a handful of images for a quick smoke check.
@@ -47,7 +47,7 @@ task pipeline:visualize-test
 The synthetic validation split can be replaced by real wrench images from Open Images:
 
 ```bash
-task pipeline:download-openimages   # ~200 real wrench images -> data/openimages_val/
+task pipeline:download-openimages   # ~200 real wrench images -> data/openimages/
 task pipeline:train-real-val        # train on synthetic, validate on real images
 ```
 
@@ -55,14 +55,14 @@ You can also run the downloader directly:
 
 ```bash
 python pipeline/download_openimages.py --class-name Wrench --split train \
-  --out data/openimages_val --limit 500
+  --out data/openimages --limit 500
 ```
 
 Then point training at the real validation set:
 
 ```bash
-python pipeline/train_yolo.py --images data/images --labels data/labels \
-  --val-images data/openimages_val/images --val-labels data/openimages_val/labels \
+python pipeline/train_yolo.py --images data/synthetic/images --labels data/synthetic/labels \
+  --val-images data/openimages/images --val-labels data/openimages/labels \
   --out data/dataset --epochs 500 --patience 15
 ```
 
@@ -70,3 +70,18 @@ python pipeline/train_yolo.py --images data/images --labels data/labels \
 - `pipeline/` — the five stage scripts (importable, run directly via `python pipeline/<step>.py`).
 - `tasks/` — go-task definitions (`Taskfile.yml` → `env`, `pipeline`).
 - `data/`, `models/` — gitignored outputs and downloaded checkpoints.
+
+### `data/` layout
+```
+data/
+├── prompts/        # stage 1 seed prompts (<mode>/prompts.{jsonl,txt})
+├── synthetic/      # stage 2-4 intermediates
+│   ├── images/      #   raw FLUX renders
+│   ├── images_pp/   #   post-processed (Albumentations)
+│   ├── labels/     #   SAM 3 labels + masks + labels.jsonl
+│   └── visuals/     #   overlay visualisations
+├── openimages/     # real-world validation set + Open Images metadata cache
+│   ├── images/  labels/  visuals/  cache/
+├── dataset/        # stage 5 assembled YOLO dataset (data.yaml, images/, labels/) + runs/
+└── inference/      # model inference outputs (train/, val/, openimages/)
+```

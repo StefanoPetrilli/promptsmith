@@ -27,6 +27,14 @@ import torch
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s :: %(message)s")
 log = logging.getLogger("flux2")
 
+for _name in ("httpx", "huggingface_hub", "urllib3", "filelock", "diffusers", "transformers"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
+try:
+    from huggingface_hub import logging as hf_logging
+    hf_logging.set_verbosity_warning()
+except Exception:
+    pass
+
 EMBED_MEMMAP_SUFFIX = ".embeds.npy"
 
 
@@ -37,7 +45,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out", required=True)
     p.add_argument("--size", type=int, default=768)
     p.add_argument("--steps", type=int, default=8)
-    p.add_argument("--guidance", type=float, default=4.0)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="fp16")
     p.add_argument("--limit", type=int, default=0)
@@ -305,6 +312,7 @@ def build_pipeline(model_id: str, dtype: torch.dtype, tokenizer, vram_margin: fl
         is_distilled=True,
     )
     apply_partial_pin(pipe, vram_margin_gb=vram_margin)
+    pipe.set_progress_bar_config(disable=True)
     torch.cuda.empty_cache()
     return pipe
 
@@ -353,7 +361,6 @@ def generate_one(
     seed: int,
     size: int,
     steps: int,
-    guidance: float,
 ):
     generator = torch.Generator(device="cuda").manual_seed(seed + i)
     prompt_embeds = nprow_to_tensor(embeds_mm[i:i + 1], dtype).to("cuda")
@@ -365,7 +372,7 @@ def generate_one(
             height=size,
             width=size,
             num_inference_steps=steps,
-            guidance_scale=guidance,
+            guidance_scale=1.0,
             generator=generator,
         ).images[0]
     except torch.cuda.OutOfMemoryError as exc:
@@ -406,7 +413,7 @@ def main() -> int:
         todo = [i for i in range(len(prompts)) if i not in done]
         for i in tqdm(todo, total=len(todo), desc="generate", unit="img"):
             img, dt = generate_one(
-                pipe, embeds_mm, dtype, i, a.seed, a.size, a.steps, a.guidance,
+                pipe, embeds_mm, dtype, i, a.seed, a.size, a.steps,
             )
             path = out_dir / image_name(a.prefix, i)
             img.save(path)

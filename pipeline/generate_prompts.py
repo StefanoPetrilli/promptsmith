@@ -18,11 +18,6 @@ from pipeline.combinations import (
     ENVIRONMENTS,
     FINISHES,
     LIGHTINGS,
-    NEG_ASSET,
-    NEG_CLEAN,
-    NEG_HARD_NEG,
-    NEG_HARD_POS,
-    NEG_PURE_NEG,
     ORIENTATIONS,
     PLAIN_BACKGROUNDS,
     SHOP_ITEMS,
@@ -75,14 +70,13 @@ def _object_phrase(subtype: str, finish: str) -> str:
     return f"{_article(finish)}{finish} {subtype}"
 
 
-def _positive_text(framing: str, subtype: str, finish: str, ax: dict, neg: str) -> str:
+def _positive_text(framing: str, subtype: str, finish: str, ax: dict) -> str:
     return _cap(_join([
         _object_phrase(subtype, finish),
         framing,
         f"{ax['arrangement']} on {ax['surface']} in {ax['scene']}",
         ax["orientation"], ax["distance"], ax["lighting"],
         "photorealistic",
-        neg,
     ]))
 
 
@@ -90,7 +84,7 @@ def build_clean_positive(rng: random.Random) -> str:
     subtype = rng.choice(WRENCH_TYPES)
     finish = rng.choice(FINISHES)
     ax = _common_axes(rng, "clean_positive")
-    return _positive_text("fully in frame, clearly separated", subtype, finish, ax, NEG_CLEAN)
+    return _positive_text("fully in frame, clearly separated", subtype, finish, ax)
 
 
 def build_hard_positive(rng: random.Random) -> str:
@@ -104,7 +98,7 @@ def build_hard_positive(rng: random.Random) -> str:
         "partially cut off by the frame",
         "small and partially in frame",
     ])
-    return _positive_text(framing, subtype, finish, ax, NEG_HARD_POS)
+    return _positive_text(framing, subtype, finish, ax)
 
 
 def build_asset(rng: random.Random) -> str:
@@ -118,7 +112,6 @@ def build_asset(rng: random.Random) -> str:
         f"on {bg} background",
         ax["orientation"], ax["distance"], ax["lighting"],
         "photorealistic, studio product shot",
-        NEG_ASSET,
     ]))
 
 
@@ -134,7 +127,6 @@ def build_hard_negative(rng: random.Random) -> str:
         f"{ax['arrangement']} on {ax['surface']} in {ax['scene']}",
         ax["distance"], ax["lighting"],
         "photorealistic",
-        NEG_HARD_NEG,
     ]))
 
 
@@ -146,7 +138,6 @@ def build_pure_negative(rng: random.Random) -> str:
         f"on {ax['surface']}",
         ax["distance"], ax["lighting"],
         "photorealistic",
-        NEG_PURE_NEG,
     ]))
 
 

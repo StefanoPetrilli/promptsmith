@@ -69,7 +69,7 @@ SURFACES = [
 
 ARRANGEMENTS = [
     "lying flat", "scattered", "fitted on a bolt", "held in a hand",
-    "hanging on a hook", "in a toolbox", "crossed over another wrench",
+    "hanging on a hook", "in a toolbox",
     "standing on its box-end", "on a bolt head", "tucked in a tool roll",
     "balanced on a pipe", "across two sockets", "clipped to a belt",
     "propped on a toolbox", "on a shop rag", "in a pile of fasteners",
@@ -117,11 +117,3 @@ SHOP_ITEMS = [
     "a measuring tape", "a flashlight", "a shop press",
     "a jack stand", "a creeper seat", "an air hose reel",
 ]
-
-# Short negative tails (FLUX `--no ...` syntax). Kept compact; the suppressed list still
-# covers the failure modes that matter (extra wrenches, look-alikes, wrench-in-negative).
-NEG_CLEAN = "--no other wrenches, no wrench-like tools"
-NEG_HARD_POS = "--no extra wrenches, no wrench-like tools"
-NEG_ASSET = "--no background objects, no other wrenches"
-NEG_HARD_NEG = "--no wrench"
-NEG_PURE_NEG = "--no wrench, no pliers, no screwdrivers, no pry bars"

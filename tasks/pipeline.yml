@@ -15,12 +15,14 @@ version: "3"
 #   handpick-test         stage 5 — review first 3 segmentations per leaf
 #   postprocess           stage 6 — Albumentations degradation (approved only) -> data/synthetic/images_pp/
 #   postprocess-test      stage 6 — degrade first 3 approved images per leaf
+#   visualize-pp          stage 6b — overlay YOLO boxes on degraded images -> data/synthetic/visuals_pp/
+#   visualize-pp-test     stage 6b — overlay first 3 degraded images per leaf
 #   train                 stage 7 — assemble dataset + fine-tune YOLO (approved only) -> data/dataset/
 #   train-test            stage 7 — 1-epoch smoke -> data/dataset/
 #
 # data/ layout:
 #   data/prompts/            stage 1 seed prompts
-#   data/synthetic/          stage 2-6 intermediates (images, labels, visuals, approved, discarded, images_pp)
+#   data/synthetic/          intermediates (images, labels, visuals, approved, discarded, images_pp, visuals_pp)
 #   data/openimages/         real-val set + metadata cache (images, labels, visuals, cache)
 #   data/dataset/            stage 7 assembled YOLO dataset + runs
 #   data/inference/          model inference outputs (train, val, openimages)
@@ -160,6 +162,24 @@ tasks:
         --out-root data/synthetic/images_pp --input-arg images
         --script pipeline/postprocess_images.py
         -- --limit 3
+
+  visualize-pp:
+    desc: "Stage 6b: overlay YOLO boxes on post-processed images -> data/synthetic/visuals_pp/"
+    cmds:
+      - >-
+        {{.PY}} pipeline/visualize_labels.py --format yolo
+        --images data/synthetic/images_pp
+        --labels data/synthetic/approved/labels
+        --out data/synthetic/visuals_pp
+
+  visualize-pp-test:
+    desc: "Stage 6b (test): overlay first 3 post-processed images per leaf -> data/synthetic/visuals_pp/"
+    cmds:
+      - >-
+        {{.PY}} pipeline/visualize_labels.py --format yolo
+        --images data/synthetic/images_pp
+        --labels data/synthetic/approved/labels
+        --out data/synthetic/visuals_pp --limit 3
 
   download-openimages:
     desc: "Download Open Images Wrench real images as val data (uses train split; validation/test have <2 images)"

@@ -10,7 +10,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -42,6 +44,8 @@ def parse_args() -> argparse.Namespace:
                    help="only applies to --format sam")
     p.add_argument("--masks-subdir", default="masks",
                    help="only applies to --format sam")
+    p.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2)),
+                   help="parallel render processes (default: CPU count)")
     return p.parse_args()
 
 
@@ -90,8 +94,23 @@ def filter_by_confidence(boxes_xyxy: list, scores: list, inst: np.ndarray | None
 
 
 def collect_images(images_dir: Path, limit: int) -> list[Path]:
-    imgs = sorted(p for p in images_dir.iterdir() if p.suffix.lower() in IMG_SUFFIXES)
-    return imgs[:limit] if limit > 0 else imgs
+    imgs = sorted(p for p in images_dir.rglob("*") if p.is_file() and p.suffix.lower() in IMG_SUFFIXES)
+    if limit <= 0:
+        return imgs
+    # per-leaf (immediate parent) limit, mirroring run_leaves' --limit semantics;
+    # flat directories fall through to a single group.
+    groups: dict[str, list[Path]] = {}
+    for p in imgs:
+        try:
+            rel = p.relative_to(images_dir)
+        except ValueError:
+            rel = Path(p.name)
+        key = rel.parts[0] if len(rel.parts) > 1 else ""
+        groups.setdefault(key, []).append(p)
+    out: list[Path] = []
+    for k in sorted(groups):
+        out.extend(groups[k][:limit])
+    return out
 
 
 def load_yolo_boxes(label_path: Path, w: int, h: int) -> list[tuple[int, int, int, int]]:
@@ -184,6 +203,51 @@ def render_yolo(image_path: Path, label_path: Path, box_width: int) -> Image.Ima
     return img
 
 
+# --- worker process entry points (picklable; take primitive args only) --------
+
+
+def _render_sam_one(entry: dict, alpha: int, box_width: int, min_conf: float,
+                    masks_subdir: str, out_dir: str) -> dict:
+    """Render one SAM-labelled image in a worker process."""
+    img_path = entry["image"]
+    stem = Path(img_path).stem
+    try:
+        inst = load_instance_mask(entry, masks_subdir)
+        n_in = len(entry.get("boxes_xyxy", []))
+        img = render_sam(img_path, entry.get("boxes_xyxy", []), entry.get("scores", []),
+                        inst, alpha, box_width, min_conf)
+        dst = Path(out_dir) / f"{stem}.png"
+        img.save(dst)
+        kept = len([s for s in entry.get("scores", []) if float(s) >= min_conf])
+        return {"image": img_path, "visual": str(dst), "n_boxes_in": n_in,
+                "n_boxes_kept": kept, "min_confidence": min_conf,
+                "ok": True, "error": None, "name": Path(img_path).name}
+    except Exception as exc:
+        return {"image": img_path, "ok": False, "error": str(exc),
+                "name": Path(img_path).name}
+
+
+def _render_yolo_one(img_path: str, img_dir: str, lbl_dir: str,
+                     out_dir: str, box_width: int) -> dict:
+    """Render one YOLO-labelled image in a worker process."""
+    ip = Path(img_path); idir = Path(img_dir); ldir = Path(lbl_dir); odir = Path(out_dir)
+    try:
+        try:
+            rel = ip.relative_to(idir)
+        except ValueError:
+            rel = Path(ip.name)
+        lbl_path = ldir / rel.with_suffix(".txt")
+        boxes = load_yolo_boxes(lbl_path, *Image.open(ip).size)
+        rendered = render_yolo(ip, lbl_path, box_width)
+        dst = odir / rel.with_suffix(".png")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        rendered.save(dst)
+        return {"image": str(ip), "label": str(lbl_path), "visual": str(dst),
+                "n_boxes": len(boxes), "ok": True, "error": None, "name": ip.name}
+    except Exception as exc:
+        return {"image": str(ip), "ok": False, "error": str(exc), "name": ip.name}
+
+
 # --- main --------------------------------------------------------------------
 
 
@@ -201,34 +265,30 @@ def main() -> int:
             if not entries:
                 log.error("No entries in %s", a.labels)
                 return 2
-            log.info("Rendering %d SAM-labelled images (min-confidence=%.2f)...",
-                     len(entries), a.min_confidence)
-            for i, e in enumerate(entries):
-                img_path = e["image"]
-                stem = Path(img_path).stem
-                log.info("[%d/%d] %s", i + 1, len(entries), Path(img_path).name)
-                try:
-                    inst = load_instance_mask(e, a.masks_subdir)
-                    n_in = len(e.get("boxes_xyxy", []))
-                    img = render_sam(
-                        img_path, e.get("boxes_xyxy", []), e.get("scores", []),
-                        inst, a.alpha, a.box_width, a.min_confidence,
-                    )
-                except Exception as exc:
-                    log.error("  failed: %s", exc)
-                    continue
-                dst = out_dir / f"{stem}.png"
-                img.save(dst)
-                kept = len([s for s in e.get("scores", []) if float(s) >= a.min_confidence])
-                ix.write(json.dumps({
-                    "image": img_path,
-                    "visual": str(dst),
-                    "n_boxes_in": n_in,
-                    "n_boxes_kept": kept,
-                    "min_confidence": a.min_confidence,
-                }) + "\n")
-                ix.flush()
-                n_ok += 1
+            log.info("Rendering %d SAM-labelled images (min-confidence=%.2f) with %d workers...",
+                     len(entries), a.min_confidence, a.workers)
+            tasks = [(e, a.alpha, a.box_width, a.min_confidence,
+                      a.masks_subdir, str(out_dir)) for e in entries]
+            with ProcessPoolExecutor(max_workers=a.workers) as ex:
+                futs = [ex.submit(_render_sam_one, *t) for t in tasks]
+                done = 0
+                for fut in as_completed(futs):
+                    res = fut.result()
+                    done += 1
+                    if res["ok"]:
+                        log.info("[%d/%d] %s", done, len(futs), res["name"])
+                        ix.write(json.dumps({
+                            "image": res["image"],
+                            "visual": res["visual"],
+                            "n_boxes_in": res["n_boxes_in"],
+                            "n_boxes_kept": res["n_boxes_kept"],
+                            "min_confidence": res["min_confidence"],
+                        }) + "\n")
+                        ix.flush()
+                        n_ok += 1
+                    else:
+                        log.error("[%d/%d] failed %s: %s",
+                                  done, len(futs), res["name"], res["error"])
 
         else:
             if not a.images:
@@ -240,26 +300,30 @@ def main() -> int:
             if not images:
                 log.error("No images found in %s", img_dir)
                 return 2
-            log.info("Rendering %d YOLO-labelled images -> %s", len(images), out_dir)
-            for img_path in images:
-                lbl_path = lbl_dir / (img_path.stem + ".txt")
-                boxes = load_yolo_boxes(lbl_path, *Image.open(img_path).size)
-                log.info("%s: %d box(es)", img_path.name, len(boxes))
-                try:
-                    rendered = render_yolo(img_path, lbl_path, a.box_width)
-                except Exception as exc:
-                    log.error("failed to render %s: %s", img_path.name, exc)
-                    continue
-                dst = out_dir / (img_path.stem + ".png")
-                rendered.save(dst)
-                ix.write(json.dumps({
-                    "image": str(img_path),
-                    "label": str(lbl_path),
-                    "visual": str(dst),
-                    "n_boxes": len(boxes),
-                }) + "\n")
-                ix.flush()
-                n_ok += 1
+            log.info("Rendering %d YOLO-labelled images -> %s with %d workers...",
+                     len(images), out_dir, a.workers)
+            tasks = [(str(p), str(img_dir), str(lbl_dir), str(out_dir), a.box_width)
+                     for p in images]
+            with ProcessPoolExecutor(max_workers=a.workers) as ex:
+                futs = [ex.submit(_render_yolo_one, *t) for t in tasks]
+                done = 0
+                for fut in as_completed(futs):
+                    res = fut.result()
+                    done += 1
+                    if res["ok"]:
+                        log.info("[%d/%d] %s: %d box(es)",
+                                 done, len(futs), res["name"], res["n_boxes"])
+                        ix.write(json.dumps({
+                            "image": res["image"],
+                            "label": res["label"],
+                            "visual": res["visual"],
+                            "n_boxes": res["n_boxes"],
+                        }) + "\n")
+                        ix.flush()
+                        n_ok += 1
+                    else:
+                        log.error("[%d/%d] failed %s: %s",
+                                  done, len(futs), res["name"], res["error"])
 
     log.info("Done. %d visuals written to %s (index: %s)", n_ok, out_dir, index)
     return 0

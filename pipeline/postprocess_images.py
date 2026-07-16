@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
-"""Step 3.5 — deterministic Albumentations degradation of rendered images."""
+"""Step 3.5 — Albumentations degradation of rendered images.
+
+The degradation suite is tuned to mimic the full mix of capture devices
+we expect in production: USB webcams, integrated laptop cameras, phone
+cameras, dashcams, CCTV / analogue-surveillance, and IP cameras. Each of
+these has its own signature failure mode (sensor noise, on-device ISP
+sharpening, harsh MPEG/MJPEG compression, low resolution, lens optics,
+colour cast from auto white balance, flare/ghosting, and light drops).
+Transforms are grouped into "failure modes" so that a degraded image
+reads like one plausible acquisition rather than a random soup of
+artifacts. Execution is parallelised across worker processes so we
+actually use the cores we have.
+"""
 from __future__ import annotations
 
 import argparse
 import json
 import logging
+import os
 import random
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +36,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out", required=True)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--limit", type=int, default=0)
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=max(1, (os.cpu_count() or 1) - 1),
+        help="Number of worker processes. Set to 1 to disable parallelism.",
+    )
     return p.parse_args()
 
 
@@ -48,21 +68,95 @@ def collect_entries(arg: str, limit: int) -> list[dict]:
 
 
 def build_pipeline():
+    """Assemble the low-quality-camera degradation pipeline.
+
+    Transforms are grouped into independent failure modes, each wrapped in
+    a OneOf so a plausible subset is applied per image. Probabilities/ranges
+    sit between "sterile rendering" and "extreme glitch" — enough to harden
+    the downstream model against the capture conditions we will see in
+    production without washing out all signal.
+    """
+    import cv2
     import albumentations as A
+
     return A.Compose([
+        # --- low resolution / soft optics ---
         A.OneOf([
-            A.ISONoise(color_shift=(0.01, 0.04), intensity=(0.1, 0.4), p=1.0),
-            A.GaussNoise(std_range=(0.02, 0.12), p=1.0),
+            A.Downscale(
+                scale_range=(0.5, 0.75),
+                interpolation_pair={"downscale": cv2.INTER_AREA, "upscale": cv2.INTER_LINEAR},
+                p=1.0,
+            ),
+            A.Defocus(radius=(3, 8), alias_blur=(0.1, 0.4), p=1.0),
+            A.ZoomBlur(max_factor=(1.0, 1.15), step_factor=(0.01, 0.03), p=1.0),
+            A.GlassBlur(sigma=0.7, max_delta=4, iterations=2, mode="fast", p=1.0),
+        ], p=0.4),
+
+        # --- motion / general blur (camera shake, slow shutter) ---
+        A.OneOf([
+            A.MotionBlur(blur_limit=(3, 7), p=1.0),
+            A.AdvancedBlur(blur_limit=(3, 7), sigma_x_limit=(0.2, 1.0), sigma_y_limit=(0.2, 1.0),
+                           rotate_limit=(-90, 90), beta_limit=(0.5, 8.0), p=1.0),
+            A.Blur(blur_limit=(3, 5), p=1.0),
+        ], p=0.35),
+
+        # --- cheap-ISP oversharpening + JPEG ringing ---
+        A.OneOf([
+            A.UnsharpMask(blur_limit=(3, 7), sigma_limit=(0.0, 1.0), alpha=(0.2, 0.6), p=1.0),
+            A.Sharpen(alpha=(0.2, 0.6), lightness=(0.5, 1.0), p=1.0),
+            A.RingingOvershoot(blur_limit=(5, 13), cutoff=(0.78, 1.57), p=1.0),
         ], p=0.3),
-        A.ImageCompression(compression_type="jpeg", quality_range=(55, 88), p=0.3),
+
+        # --- sensor noise (low-light / cheap sensors) ---
         A.OneOf([
-            A.MotionBlur(blur_limit=(3, 5), p=1.0),
-            A.Blur(blur_limit=(3, 3), p=1.0),
-        ], p=0.25),
-        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.4),
-        A.RandomFog(fog_coef_range=(0.05, 0.25), alpha_coef=0.08, p=0.15),
-        A.CLAHE(clip_limit=(1.0, 3.0), p=0.1),
-        A.ToGray(p=0.05),
+            A.ISONoise(color_shift=(0.01, 0.06), intensity=(0.1, 0.45), p=1.0),
+            A.GaussNoise(std_range=(0.02, 0.15), p=1.0),
+            A.ShotNoise(scale_range=(0.1, 0.35), p=1.0),
+            A.SaltAndPepper(amount=(0.001, 0.015), salt_vs_pepper=(0.4, 0.6), p=1.0),
+        ], p=0.45),
+
+        # --- codec compression, moderately harsh ---
+        A.ImageCompression(compression_type="jpeg", quality_range=(45, 85), p=0.4),
+
+        # --- white balance / colour cast / ISP colour ---
+        A.OneOf([
+            A.PlanckianJitter(mode="blackbody", sampling_method="uniform", p=1.0),
+            A.ColorJitter(brightness=(0.88, 1.12), contrast=(0.85, 1.15),
+                          saturation=(0.75, 1.25), hue=(-0.05, 0.05), p=1.0),
+            A.HueSaturationValue(hue_shift_limit=(-20, 20), sat_shift_limit=(-30, 30),
+                                 val_shift_limit=(-20, 20), p=1.0),
+        ], p=0.4),
+
+        # --- exposure / auto-gain ---
+        A.RandomBrightnessContrast(brightness_limit=0.25, contrast_limit=0.25, p=0.4),
+        A.RandomGamma(gamma_limit=(75, 130), p=0.3),
+
+        # --- cheap-lens chromatic aberration ---
+        A.ChromaticAberration(
+            primary_distortion_limit=(-0.03, 0.03),
+            secondary_distortion_limit=(-0.06, 0.06),
+            mode="random", p=0.2,
+        ),
+
+        # --- light / environment artefacts (flare, shadow, light haze) ---
+        A.OneOf([
+            A.RandomShadow(shadow_roi=(0.0, 0.5, 1.0, 1.0), num_shadows_limit=(1, 2),
+                           shadow_intensity_range=(0.4, 0.6), p=1.0),
+            (A.RandomSunFlare(flare_roi=(0.0, 0.0, 1.0, 0.5), angle_range=(0.0, 1.0),
+                               num_flare_circles_range=(6, 10), method="physics_based",
+                               p=1.0)
+             if hasattr(A, "RandomSunFlare") else A.NoOp(p=1.0)),
+            A.RandomFog(fog_coef_range=(0.05, 0.2), alpha_coef=0.08, p=1.0),
+        ], p=0.15),
+
+        # --- occasional flat / muted capture (cheap sensor in bad light) ---
+        A.OneOf([
+            A.ToGray(p=1.0),
+            A.ToSepia(p=1.0),
+        ], p=0.08),
+
+        # --- modest tone curve wobble (auto contrast heuristics) ---
+        A.RandomToneCurve(scale=0.15, p=0.15),
     ], p=1.0)
 
 
@@ -100,6 +194,52 @@ def backfill_manifest(out_dir: Path, entries: list[dict], done: set[str], manife
         log.info("Backfilled %d missing manifest_pp entries.", len(missing))
 
 
+# ---------------------------------------------------------------------------
+# Worker plumbing
+# ---------------------------------------------------------------------------
+#
+# Each worker process builds the pipeline once and reuses it. Compose objects
+# are picklable, but rebuilding them in the worker is cheaper than repeatedly
+# sending them over the pipe, and it avoids any lazy state bleeding over
+# between processes.
+_PIPELINE_CACHE: dict[str, object] = {}
+
+
+def _get_pipeline():
+    p = _PIPELINE_CACHE.get("main")
+    if p is None:
+        p = build_pipeline()
+        _PIPELINE_CACHE["main"] = p
+    return p
+
+
+def _worker(task: dict) -> dict:
+    """Run in a worker process: degrade one image, write it, return a manifest line."""
+    src = Path(task["image"])
+    out_dir = Path(task["out"])
+    seed = task["seed"]
+    index = task["index"]
+    prompt = task["prompt"]
+
+    iseed = (seed + index) % (2**32)
+    random.seed(iseed)
+    np.random.seed(iseed)
+    pipeline = _get_pipeline()
+    pipeline.set_random_seed(iseed)
+
+    arr = np.array(Image.open(src).convert("RGB"))
+    img = Image.fromarray(pipeline(image=arr)["image"])
+
+    dst = out_dir / f"{src.stem}.png"
+    img.save(dst)
+    return {
+        "path": str(dst),
+        "source": str(src),
+        "index": index,
+        "prompt": prompt,
+    }
+
+
 def process_one(src: Path, pipeline, seed: int, index: int) -> Image.Image:
     iseed = (seed + index) % (2**32)
     random.seed(iseed)
@@ -107,6 +247,16 @@ def process_one(src: Path, pipeline, seed: int, index: int) -> Image.Image:
     pipeline.set_random_seed(iseed)
     arr = np.array(Image.open(src).convert("RGB"))
     return Image.fromarray(pipeline(image=arr)["image"])
+
+
+def _write_manifest_line(mf, index: int, dst: str, src: str, prompt: str) -> None:
+    mf.write(json.dumps({
+        "index": index,
+        "image": str(dst),
+        "source": str(src),
+        "prompt": prompt,
+    }) + "\n")
+    mf.flush()
 
 
 def main() -> int:
@@ -130,24 +280,37 @@ def main() -> int:
             log.info("All outputs already present.")
             return 0
 
-    pipeline = build_pipeline()
     todo = [e for e in entries if Path(e["image"]).stem not in done]
+    if not todo:
+        log.info("Nothing to do.")
+        return 0
+
+    tasks = [
+        {**e, "out": str(out_dir), "seed": a.seed}
+        for e in todo
+    ]
+    workers = max(1, a.workers)
+    log.info("Postprocessing %d images with %d worker(s).", len(todo), workers)
 
     with manifest.open("a", encoding="utf-8") as mf:
-        for e in tqdm(todo, total=len(todo), desc="postprocess", unit="img"):
-            src = Path(e["image"])
-            stem = src.stem
-            img = process_one(src, pipeline, a.seed, e["index"])
-            dst = out_dir / f"{stem}.png"
-            img.save(dst)
-            mf.write(json.dumps({
-                "index": e["index"],
-                "image": str(dst),
-                "source": str(src),
-                "prompt": e["prompt"],
-            }) + "\n")
-            mf.flush()
-            tqdm.write(f"  saved {dst.name} <- {src.name}")
+        if workers == 1:
+            # Serial path — keep behaviour identical without the pool overhead.
+            pipeline = build_pipeline()
+            for e in tqdm(todo, total=len(todo), desc="postprocess", unit="img"):
+                src = Path(e["image"])
+                img = process_one(src, pipeline, a.seed, e["index"])
+                dst = out_dir / f"{src.stem}.png"
+                img.save(dst)
+                _write_manifest_line(mf, e["index"], str(dst), str(src), e["prompt"])
+                tqdm.write(f"  saved {dst.name} <- {src.name}")
+        else:
+            with ProcessPoolExecutor(max_workers=workers) as ex:
+                futures = {ex.submit(_worker, t): t for t in tasks}
+                for fut in tqdm(as_completed(futures), total=len(futures),
+                                desc="postprocess", unit="img"):
+                    res = fut.result()
+                    _write_manifest_line(mf, res["index"], res["path"],
+                                          res["source"], res["prompt"])
 
     log.info("Done. %d degraded images in %s", len(entries), out_dir)
     return 0

@@ -12,7 +12,10 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 | 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (fp16 + partial GPU pinning; Qwen3 embeds precomputed + cached) → `data/synthetic/images/` |
 | 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` + mask PNGs in `data/synthetic/labels/` |
 | 4 | `pipeline:visualize` (`visualize-test`) | Overlay segmentation + boxes on the images → `data/synthetic/visuals/` |
-| 5 | `pipeline:train` (`train-test`) | Assemble train/val split + fine-tune **YOLOv8n** → `data/dataset/runs/` |
+| 5 | `pipeline:handpick` (`handpick-test`) | Human approve/discard of segmentations → `data/synthetic/approved/` (+discarded) |
+| 6 | `pipeline:postprocess` (`postprocess-test`) | Albumentations degradation (approved only) → `data/synthetic/images_pp/` |
+| 6b | `pipeline:visualize-pp` (`visualize-pp-test`) | Overlay YOLO boxes on degraded images → `data/synthetic/visuals_pp/` |
+| 7 | `pipeline:train` (`train-test`) | Assemble train/val split + fine-tune **YOLOv8n** → `data/dataset/runs/` |
 |   | `pipeline:download-openimages` | Download real **Open Images** wrench images for validation → `data/openimages/` |
 |   | `pipeline:train-real-val` | Train on synthetic images, validate on real Open Images |
 
@@ -34,12 +37,16 @@ task pipeline:label
 task pipeline:train
 task pipeline:visualize
 
+# and on the post-processed images (after postprocess)
+task pipeline:visualize-pp
+
 # or smoke-test each step
 task pipeline:test
 task pipeline:images-test
 task pipeline:label-test
 task pipeline:train-test
 task pipeline:visualize-test
+task pipeline:visualize-pp-test
 ```
 
 ## Real-world validation with Open Images
@@ -75,11 +82,14 @@ python pipeline/train_yolo.py --images data/synthetic/images --labels data/synth
 ```
 data/
 ├── prompts/        # stage 1 seed prompts (<mode>/prompts.{jsonl,txt})
-├── synthetic/      # stage 2-4 intermediates
+├── synthetic/      # stage 2-6 intermediates
 │   ├── images/      #   raw FLUX renders
 │   ├── images_pp/   #   post-processed (Albumentations)
 │   ├── labels/     #   SAM 3 labels + masks + labels.jsonl
-│   └── visuals/     #   overlay visualisations
+│   ├── visuals/     #   SAM 3 overlay visualisations (for handpick review)
+│   ├── visuals_pp/ #   YOLO overlays on post-processed images (final QC)
+│   ├── approved/   #   hand-picked images + labels (symlinks)
+│   └── discarded/  #   rejected images + labels (symlinks)
 ├── openimages/     # real-world validation set + Open Images metadata cache
 │   ├── images/  labels/  visuals/  cache/
 ├── dataset/        # stage 5 assembled YOLO dataset (data.yaml, images/, labels/) + runs/

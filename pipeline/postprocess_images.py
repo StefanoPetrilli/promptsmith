@@ -79,84 +79,86 @@ def build_pipeline():
     import cv2
     import albumentations as A
 
+    # NOTE: tuned "mild" — close to typical phone/webcam photos rather than
+    # worst-case CCTV. Heavy GlassBlur and harsh JPEG were pushing the synthetic
+    # distribution *away* from the real verification photos, hurting transfer.
     return A.Compose([
-        # --- low resolution / soft optics ---
+        # --- low resolution / soft optics (mild) ---
         A.OneOf([
             A.Downscale(
-                scale_range=(0.5, 0.75),
+                scale_range=(0.7, 0.9),
                 interpolation_pair={"downscale": cv2.INTER_AREA, "upscale": cv2.INTER_LINEAR},
                 p=1.0,
             ),
-            A.Defocus(radius=(3, 8), alias_blur=(0.1, 0.4), p=1.0),
-            A.ZoomBlur(max_factor=(1.0, 1.15), step_factor=(0.01, 0.03), p=1.0),
-            A.GlassBlur(sigma=0.7, max_delta=4, iterations=2, mode="fast", p=1.0),
-        ], p=0.4),
+            A.Defocus(radius=(2, 5), alias_blur=(0.1, 0.3), p=1.0),
+            A.ZoomBlur(max_factor=(1.0, 1.08), step_factor=(0.01, 0.02), p=1.0),
+        ], p=0.3),
 
-        # --- motion / general blur (camera shake, slow shutter) ---
+        # --- motion / general blur (rare, mild) ---
         A.OneOf([
-            A.MotionBlur(blur_limit=(3, 7), p=1.0),
-            A.AdvancedBlur(blur_limit=(3, 7), sigma_x_limit=(0.2, 1.0), sigma_y_limit=(0.2, 1.0),
-                           rotate_limit=(-90, 90), beta_limit=(0.5, 8.0), p=1.0),
-            A.Blur(blur_limit=(3, 5), p=1.0),
-        ], p=0.35),
+            A.MotionBlur(blur_limit=(3, 5), p=1.0),
+            A.AdvancedBlur(blur_limit=(3, 5), sigma_x_limit=(0.2, 0.8), sigma_y_limit=(0.2, 0.8),
+                           rotate_limit=(-45, 45), beta_limit=(0.5, 6.0), p=1.0),
+            A.Blur(blur_limit=(3, 4), p=1.0),
+        ], p=0.2),
 
         # --- cheap-ISP oversharpening + JPEG ringing ---
         A.OneOf([
-            A.UnsharpMask(blur_limit=(3, 7), sigma_limit=(0.0, 1.0), alpha=(0.2, 0.6), p=1.0),
-            A.Sharpen(alpha=(0.2, 0.6), lightness=(0.5, 1.0), p=1.0),
-            A.RingingOvershoot(blur_limit=(5, 13), cutoff=(0.78, 1.57), p=1.0),
+            A.UnsharpMask(blur_limit=(3, 5), sigma_limit=(0.0, 0.8), alpha=(0.2, 0.5), p=1.0),
+            A.Sharpen(alpha=(0.2, 0.5), lightness=(0.5, 1.0), p=1.0),
+            A.RingingOvershoot(blur_limit=(5, 11), cutoff=(0.78, 1.57), p=1.0),
+        ], p=0.2),
+
+        # --- sensor noise (low-light / cheap sensors, mild) ---
+        A.OneOf([
+            A.ISONoise(color_shift=(0.01, 0.04), intensity=(0.1, 0.25), p=1.0),
+            A.GaussNoise(std_range=(0.02, 0.08), p=1.0),
+            A.ShotNoise(scale_range=(0.1, 0.25), p=1.0),
+            A.SaltAndPepper(amount=(0.001, 0.008), salt_vs_pepper=(0.4, 0.6), p=1.0),
         ], p=0.3),
 
-        # --- sensor noise (low-light / cheap sensors) ---
-        A.OneOf([
-            A.ISONoise(color_shift=(0.01, 0.06), intensity=(0.1, 0.45), p=1.0),
-            A.GaussNoise(std_range=(0.02, 0.15), p=1.0),
-            A.ShotNoise(scale_range=(0.1, 0.35), p=1.0),
-            A.SaltAndPepper(amount=(0.001, 0.015), salt_vs_pepper=(0.4, 0.6), p=1.0),
-        ], p=0.45),
-
-        # --- codec compression, moderately harsh ---
-        A.ImageCompression(compression_type="jpeg", quality_range=(45, 85), p=0.4),
+        # --- codec compression (realistic phone JPEG, not harsh) ---
+        A.ImageCompression(compression_type="jpeg", quality_range=(70, 92), p=0.3),
 
         # --- white balance / colour cast / ISP colour ---
         A.OneOf([
             A.PlanckianJitter(mode="blackbody", sampling_method="uniform", p=1.0),
-            A.ColorJitter(brightness=(0.88, 1.12), contrast=(0.85, 1.15),
-                          saturation=(0.75, 1.25), hue=(-0.05, 0.05), p=1.0),
-            A.HueSaturationValue(hue_shift_limit=(-20, 20), sat_shift_limit=(-30, 30),
-                                 val_shift_limit=(-20, 20), p=1.0),
-        ], p=0.4),
+            A.ColorJitter(brightness=(0.9, 1.1), contrast=(0.88, 1.12),
+                          saturation=(0.8, 1.2), hue=(-0.04, 0.04), p=1.0),
+            A.HueSaturationValue(hue_shift_limit=(-15, 15), sat_shift_limit=(-25, 25),
+                                 val_shift_limit=(-15, 15), p=1.0),
+        ], p=0.3),
 
         # --- exposure / auto-gain ---
-        A.RandomBrightnessContrast(brightness_limit=0.25, contrast_limit=0.25, p=0.4),
-        A.RandomGamma(gamma_limit=(75, 130), p=0.3),
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=0.35),
+        A.RandomGamma(gamma_limit=(80, 120), p=0.25),
 
         # --- cheap-lens chromatic aberration ---
         A.ChromaticAberration(
             primary_distortion_limit=(-0.03, 0.03),
             secondary_distortion_limit=(-0.06, 0.06),
-            mode="random", p=0.2,
+            mode="random", p=0.15,
         ),
 
         # --- light / environment artefacts (flare, shadow, light haze) ---
         A.OneOf([
             A.RandomShadow(shadow_roi=(0.0, 0.5, 1.0, 1.0), num_shadows_limit=(1, 2),
-                           shadow_intensity_range=(0.4, 0.6), p=1.0),
+                           shadow_intensity_range=(0.3, 0.5), p=1.0),
             (A.RandomSunFlare(flare_roi=(0.0, 0.0, 1.0, 0.5), angle_range=(0.0, 1.0),
                                num_flare_circles_range=(6, 10), method="physics_based",
                                p=1.0)
              if hasattr(A, "RandomSunFlare") else A.NoOp(p=1.0)),
-            A.RandomFog(fog_coef_range=(0.05, 0.2), alpha_coef=0.08, p=1.0),
-        ], p=0.15),
+            A.RandomFog(fog_coef_range=(0.05, 0.15), alpha_coef=0.08, p=1.0),
+        ], p=0.1),
 
-        # --- occasional flat / muted capture (cheap sensor in bad light) ---
+        # --- rare flat / muted capture ---
         A.OneOf([
             A.ToGray(p=1.0),
             A.ToSepia(p=1.0),
-        ], p=0.08),
+        ], p=0.03),
 
         # --- modest tone curve wobble (auto contrast heuristics) ---
-        A.RandomToneCurve(scale=0.15, p=0.15),
+        A.RandomToneCurve(scale=0.1, p=0.1),
     ], p=1.0)
 
 

@@ -15,6 +15,18 @@ models/
 *.jpeg
 *.pt
 
+# the verification dataset is a small, curated, versioned hold-out -> tracked in git
+!verification_dataset/
+!verification_dataset/**
+# scratch + helpers + regenerable artifacts are not part of the versioned artifact
+verification_dataset/_*.py
+verification_dataset/_web_annotate.log
+verification_dataset/_originals/
+verification_dataset/positive_visuals/
+verification_dataset/positive_visuals_manual/
+verification_dataset/positive_labels/masks/
+verification_dataset/assembled/
+
 .cache/
 experiments/out/
 

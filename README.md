@@ -16,8 +16,11 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 | 6 | `pipeline:postprocess` (`postprocess-test`) | Albumentations degradation (approved only) → `data/synthetic/images_pp/` |
 | 6b | `pipeline:visualize-pp` (`visualize-pp-test`) | Overlay YOLO boxes on degraded images → `data/synthetic/visuals_pp/` |
 | 7 | `pipeline:train` (`train-test`) | Assemble train/val split + fine-tune **YOLOv8n** → `data/dataset/runs/` |
-|   | `pipeline:download-openimages` | Download real **Open Images** wrench images for validation → `data/openimages/` |
-|   | `pipeline:train-real-val` | Train on synthetic images, validate on real Open Images |
+|   | `pipeline:assemble-verification` | Stage + version the real verification dataset → `verification_dataset/assembled/` |
+|   | `pipeline:train-real-val` | Train on synthetic images, validate on the real verification dataset |
+|   | `pipeline:inference-verification` | Run the trained model on the verification dataset vs. GT |
+
+Each `*-test` variant runs on a handful of images for a quick smoke check.
 
 Each `*-test` variant runs on a handful of images for a quick smoke check.
 
@@ -49,29 +52,40 @@ task pipeline:visualize-test
 task pipeline:visualize-pp-test
 ```
 
-## Real-world validation with Open Images
+## Real-world validation with the verification dataset
 
-The synthetic validation split can be replaced by real wrench images from Open Images:
+The synthetic validation split can be replaced by a hand-curated real hold-out set under
+`verification_dataset/` (positives with YOLO boxes; hard-negatives and negatives as
+background to probe false positives). Assemble + version it, then train with it as the
+validation split:
 
 ```bash
-task pipeline:download-openimages   # ~200 real wrench images -> data/openimages/
-task pipeline:train-real-val        # train on synthetic, validate on real images
+task pipeline:assemble-verification   # stage flat YOLO set -> verification_dataset/assembled/
+task pipeline:visualize-verification   # overlay GT boxes for QC
+task pipeline:train-real-val           # train on synthetic, validate on real images
+task pipeline:inference-verification   # run trained model on the verification set vs GT
 ```
 
-You can also run the downloader directly:
+You can also run the assembler directly:
 
 ```bash
-python pipeline/download_openimages.py --class-name Wrench --split train \
-  --out data/openimages --limit 500
+python pipeline/assemble_verification.py --root verification_dataset \
+  --out verification_dataset/assembled
 ```
 
-Then point training at the real validation set:
+Then point training at it:
 
 ```bash
-python pipeline/train_yolo.py --images data/synthetic/images --labels data/synthetic/labels \
-  --val-images data/openimages/images --val-labels data/openimages/labels \
+python pipeline/train_yolo.py --images data/synthetic/approved/images \
+  --labels data/synthetic/approved/labels \
+  --val-images verification_dataset/assembled/images \
+  --val-labels verification_dataset/assembled/labels \
   --out data/dataset --epochs 500 --patience 15
 ```
+
+The assembled dir is self-contained and versioned: `manifest.json` (per-file sha256,
+dims, box counts, split) + `VERSION` (content-addressed). Commit it to git so every
+run pins a specific dataset snapshot.
 
 ## Layout
 - `pipeline/` — the five stage scripts (importable, run directly via `python pipeline/<step>.py`).
@@ -90,8 +104,13 @@ data/
 │   ├── visuals_pp/ #   YOLO overlays on post-processed images (final QC)
 │   ├── approved/   #   hand-picked images + labels (symlinks)
 │   └── discarded/  #   rejected images + labels (symlinks)
-├── openimages/     # real-world validation set + Open Images metadata cache
-│   ├── images/  labels/  visuals/  cache/
 ├── dataset/        # stage 5 assembled YOLO dataset (data.yaml, images/, labels/) + runs/
-└── inference/      # model inference outputs (train/, val/, openimages/)
+└── inference/      # model inference outputs (train/, val/, verification/)
+
+verification_dataset/   # real hold-out set (committed, versioned)
+├── positive/ hard_negatives/ negatives/   # source images (by split)
+├── positive_labels/                       # YOLO .txt for positive images
+└── assembled/                             # flat versioned YOLO set consumed by training
+    ├── images/ labels/  visuals/
+    ├── manifest.json   VERSION
 ```

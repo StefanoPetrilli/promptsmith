@@ -23,9 +23,10 @@ version: "3"
 # data/ layout:
 #   data/prompts/            stage 1 seed prompts
 #   data/synthetic/          intermediates (images, labels, visuals, approved, discarded, images_pp, visuals_pp)
-#   data/openimages/         real-val set + metadata cache (images, labels, visuals, cache)
+#   verification_dataset/   real hold-out images (positive/ hard_negatives/ negatives/) +
+#                           assembled/ flat versioned YOLO set (images/ labels/ manifest.json VERSION)
 #   data/dataset/            stage 7 assembled YOLO dataset + runs
-#   data/inference/          model inference outputs (train, val, openimages)
+#   data/inference/          model inference outputs (train, val, verification)
 
 vars:
   PY: .venv/bin/python
@@ -181,19 +182,18 @@ tasks:
         --labels data/synthetic/approved/labels
         --out data/synthetic/visuals_pp --limit 3
 
-  download-openimages:
-    desc: "Download Open Images Wrench real images as val data (uses train split; validation/test have <2 images)"
+  assemble-verification:
+    desc: "Assemble + version the real verification dataset -> verification_dataset/assembled/ (images/ labels/ manifest.json VERSION)"
     cmds:
-      - "{{.PY}} pipeline/download_openimages.py --class-name Wrench --split train \
-        --out data/openimages --limit 500"
+      - "{{.PY}} pipeline/assemble_verification.py --root verification_dataset --out verification_dataset/assembled"
 
-  visualize-openimages:
-    desc: "Overlay YOLO boxes on Open Images validation set -> data/openimages/visuals/"
+  visualize-verification:
+    desc: "Overlay YOLO GT boxes on the assembled verification set -> verification_dataset/assembled/visuals/"
     cmds:
       - "{{.PY}} pipeline/visualize_labels.py --format yolo \
-        --images data/openimages/images \
-        --labels data/openimages/labels \
-        --out data/openimages/visuals"
+        --images verification_dataset/assembled/images \
+        --labels verification_dataset/assembled/labels \
+        --out verification_dataset/assembled/visuals"
 
   train:
     desc: "Stage 7: assemble single-class YOLO dataset (from approved images_pp/) + fine-tune"
@@ -202,10 +202,10 @@ tasks:
         --out data/dataset --base models/yolo26n.pt --epochs 50"
 
   train-real-val:
-    desc: "Stage 7: train on approved synthetic, validate on real Open Images Wrench"
+    desc: "Stage 7: train on approved synthetic, validate on real verification dataset (assembled)"
     cmds:
       - "{{.PY}} pipeline/train_yolo.py --images data/synthetic/approved/images --labels data/synthetic/approved/labels \
-        --val-images data/openimages/images --val-labels data/openimages/labels \
+        --val-images verification_dataset/assembled/images --val-labels verification_dataset/assembled/labels \
         --out data/dataset --base models/yolo26n.pt --epochs 500 --patience 15"
 
   train-test:
@@ -231,10 +231,10 @@ tasks:
         --gt-labels data/dataset/labels/val \
         --out data/inference/val"
 
-  inference-openimages:
-    desc: "Run trained model on Open Images validation, compare to GT boxes"
+  inference-verification:
+    desc: "Run trained model on the verification dataset, compare to GT boxes"
     cmds:
       - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
-        --source data/openimages/images \
-        --gt-labels data/openimages/labels \
-        --out data/inference/openimages"
+        --source verification_dataset/assembled/images \
+        --gt-labels verification_dataset/assembled/labels \
+        --out data/inference/verification"

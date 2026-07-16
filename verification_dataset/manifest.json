@@ -1,0 +1,1416 @@
+{
+  "name": "numeri verification dataset",
+  "task": "single-class object detection (wrench)",
+  "version": "v1-20260716-45f859ea6d11",
+  "created_utc": "2026-07-16T13:47:47Z",
+  "classes": [
+    "wrench"
+  ],
+  "splits": {
+    "positive": 50,
+    "hard_negative": 30,
+    "negative": 59
+  },
+  "totals": {
+    "images": 139,
+    "labeled_boxes": 188,
+    "negatives": 89
+  },
+  "layout": {
+    "images": "images/",
+    "labels": "labels/",
+    "format": "YOLO (0 xc yc w h, normalized)"
+  },
+  "files": [
+    {
+      "split": "positive",
+      "image": "positive_positive_0001.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0001.jpg",
+      "label": "positive_positive_0001.txt",
+      "boxes": 1,
+      "width": 480,
+      "height": 272,
+      "sha256": "2f86d015cc3c8f6a8cc6cec53c065809ff5bc9687eb616cd1a40b32263f89c6e"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0002.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0002.jpg",
+      "label": "positive_positive_0002.txt",
+      "boxes": 1,
+      "width": 480,
+      "height": 270,
+      "sha256": "d49704e97209e7759483f4997fd1de0d215e58f4108dfa1aecb2ba8667b5ca79"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0003.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0003.jpg",
+      "label": "positive_positive_0003.txt",
+      "boxes": 7,
+      "width": 640,
+      "height": 589,
+      "sha256": "70adf57e9db4a33f99d4cdd354485f5ce97ecbd3d19b7c584a5475101cb10555"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0004.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0004.jpg",
+      "label": "positive_positive_0004.txt",
+      "boxes": 1,
+      "width": 641,
+      "height": 360,
+      "sha256": "1486d928762896f84db5f15e991e354c745333a3b28cda7bb05a93ad2bc03360"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0005.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0005.jpg",
+      "label": "positive_positive_0005.txt",
+      "boxes": 1,
+      "width": 641,
+      "height": 360,
+      "sha256": "ba06a59c35858d0cd7c4f8fdda231d89ebe0932db4db50dd0f35fee338927e6d"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0006.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0006.jpg",
+      "label": "positive_positive_0006.txt",
+      "boxes": 1,
+      "width": 641,
+      "height": 360,
+      "sha256": "ab6b0e127ed115bc0989bd8c681b1ef5485353f04640747f65c7b2c1518b649d"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0007.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0007.jpg",
+      "label": "positive_positive_0007.txt",
+      "boxes": 1,
+      "width": 350,
+      "height": 350,
+      "sha256": "604aa26f66bd1b097af50bf3cdb7f3529d06cdaf7f3d12dafe6b6b365d8486f2"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0008.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0008.jpg",
+      "label": "positive_positive_0008.txt",
+      "boxes": 7,
+      "width": 750,
+      "height": 750,
+      "sha256": "db20756ee448fb54de3382cdfec25170d7c3705082dd08d18c97f316ebce70ba"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0009.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0009.jpg",
+      "label": "positive_positive_0009.txt",
+      "boxes": 1,
+      "width": 1920,
+      "height": 1440,
+      "sha256": "17262703128927b1b6736d94d65e2ef8dba5394f8241175a655dc1f3f6292f61"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0010.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0010.jpg",
+      "label": "positive_positive_0010.txt",
+      "boxes": 12,
+      "width": 250,
+      "height": 413,
+      "sha256": "79a384b3ee8965ac9f279d9035b657d5e1e9baf66dfdb799d0ea597cbfe18cf4"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0011.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0011.jpg",
+      "label": "positive_positive_0011.txt",
+      "boxes": 1,
+      "width": 1050,
+      "height": 700,
+      "sha256": "5833becd58fd63eb0e510fd57a8137377d481d9074a9e50d03bad8de59d2f42c"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0012.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0012.jpg",
+      "label": "positive_positive_0012.txt",
+      "boxes": 1,
+      "width": 1023,
+      "height": 682,
+      "sha256": "178129352f91436d868f0a5dfc3ca2b387545ff18477aca343814d53654558cc"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0013.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0013.jpg",
+      "label": "positive_positive_0013.txt",
+      "boxes": 2,
+      "width": 268,
+      "height": 480,
+      "sha256": "f3ee47efd0ac16c53dabdb69019afa47de7232bf28161958cc2b4f1b93c90577"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0014.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0014.jpg",
+      "label": "positive_positive_0014.txt",
+      "boxes": 1,
+      "width": 612,
+      "height": 408,
+      "sha256": "f0c62879d764ce1a2af3d48082ad071b93a1981589e2cac364b46eb1e5f2dbe3"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0015.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0015.jpg",
+      "label": "positive_positive_0015.txt",
+      "boxes": 22,
+      "width": 768,
+      "height": 432,
+      "sha256": "09d80dbd62d89626156a1756ce801ea7edbb870388d2e8896aa4d81d28d9ca19"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0016.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0016.jpg",
+      "label": "positive_positive_0016.txt",
+      "boxes": 1,
+      "width": 612,
+      "height": 452,
+      "sha256": "c5a45918fddf8000d666f2fca71edcda325beae5dab72c0932c680bb11f3c45b"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0017.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0017.jpg",
+      "label": "positive_positive_0017.txt",
+      "boxes": 2,
+      "width": 500,
+      "height": 435,
+      "sha256": "f1fb50435a403b87cc134161475d556c8afd3f1f74ec7944224423efd16ebf60"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0018.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0018.jpg",
+      "label": "positive_positive_0018.txt",
+      "boxes": 1,
+      "width": 686,
+      "height": 386,
+      "sha256": "23114c263f239c2e7f00a4f94c8b8cfec5872aca8cc327dd6613d1af6e766975"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0019.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0019.jpg",
+      "label": "positive_positive_0019.txt",
+      "boxes": 6,
+      "width": 686,
+      "height": 386,
+      "sha256": "fffd6ee9552a31198f4357e40d8a8a6dc25f628537b18a9c60a779b8850105cf"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0020.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0020.jpg",
+      "label": "positive_positive_0020.txt",
+      "boxes": 5,
+      "width": 480,
+      "height": 360,
+      "sha256": "51342b6a82ab82f0d418bc03b45e16d76650fcbe42b43263b33187294ff66def"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0021.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0021.jpg",
+      "label": "positive_positive_0021.txt",
+      "boxes": 2,
+      "width": 480,
+      "height": 360,
+      "sha256": "67e0363506210e09410da68c3db39d8d3ffb964e6f0a5e51ab4a950b0553e64d"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0022.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0022.jpg",
+      "label": "positive_positive_0022.txt",
+      "boxes": 8,
+      "width": 447,
+      "height": 447,
+      "sha256": "aa82b3c62f2939788b61f1a57905ec6e59e13d6a3ba2fc9d241dfa173902eb97"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0023.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0023.jpg",
+      "label": "positive_positive_0023.txt",
+      "boxes": 2,
+      "width": 335,
+      "height": 597,
+      "sha256": "b7bfc7052f89d73aa7b7a9aa3bc624bc87fb87d33a74e38dbbf33aa495776dbd"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0024.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0024.jpg",
+      "label": "positive_positive_0024.txt",
+      "boxes": 3,
+      "width": 596,
+      "height": 335,
+      "sha256": "6f5dbfa763dc61796464cd8ef3590532fd7ddd38ea305c0269f1e5daa9a92f25"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0025.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0025.jpg",
+      "label": "positive_positive_0025.txt",
+      "boxes": 2,
+      "width": 516,
+      "height": 387,
+      "sha256": "1142937a719aa8e9aaedc84556d641e395c5d68de024a768d91e23026503714f"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0026.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0026.jpg",
+      "label": "positive_positive_0026.txt",
+      "boxes": 1,
+      "width": 387,
+      "height": 516,
+      "sha256": "a977b055bdf88e36bb756d9784ffc5d77b4fadb08daa475c2ba755eaec313348"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0027.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0027.jpg",
+      "label": "positive_positive_0027.txt",
+      "boxes": 1,
+      "width": 364,
+      "height": 280,
+      "sha256": "14902a8af61333cee299d90cc9c8fd0ed312e52bb12d13d6957eb8db10eb0574"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0028.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0028.jpg",
+      "label": "positive_positive_0028.txt",
+      "boxes": 1,
+      "width": 678,
+      "height": 452,
+      "sha256": "4a7662e77422522d05115307b84681ccc837529a32daa55781d5db960f4e8025"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0029.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0029.jpg",
+      "label": "positive_positive_0029.txt",
+      "boxes": 1,
+      "width": 275,
+      "height": 183,
+      "sha256": "ea0c0234b0c758556d041b15be863f45612637924db22cb31256e4b64fa9cba5"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0030.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0030.jpg",
+      "label": "positive_positive_0030.txt",
+      "boxes": 2,
+      "width": 387,
+      "height": 516,
+      "sha256": "51c36326d1d86e3d79357a8c87514931ba4fcf14b4ec1e3fdb3e31a08e960314"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0031.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0031.jpg",
+      "label": "positive_positive_0031.txt",
+      "boxes": 1,
+      "width": 260,
+      "height": 194,
+      "sha256": "ae68d4ec4bcad0886e5c9e80547320f7f94807f7c6aa4a1f0c6c24dec30d73f5"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0032.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0032.jpg",
+      "label": "positive_positive_0032.txt",
+      "boxes": 1,
+      "width": 554,
+      "height": 554,
+      "sha256": "73930ac36afa6d0d5406bcad01204fa8ed827d576023224846830942237f7308"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0033.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0033.jpg",
+      "label": "positive_positive_0033.txt",
+      "boxes": 20,
+      "width": 437,
+      "height": 702,
+      "sha256": "8708dcd26fd7588e4d7b13cefad8e86d287eeecfbe0b3cd03cf70667a63de644"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0034.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0034.jpg",
+      "label": "positive_positive_0034.txt",
+      "boxes": 1,
+      "width": 547,
+      "height": 365,
+      "sha256": "2292d84e3145134a90389578f4c2c589c2c258d526707bf97bc319a3d65afa91"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0035.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0035.jpg",
+      "label": "positive_positive_0035.txt",
+      "boxes": 1,
+      "width": 335,
+      "height": 597,
+      "sha256": "ce059528be2ec839465a8a0cb4a931015a5e8fdbcbeaf7e6f119b0a0cda24946"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0036.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0036.jpg",
+      "label": "positive_positive_0036.txt",
+      "boxes": 5,
+      "width": 452,
+      "height": 442,
+      "sha256": "590628fa36b2a2546a5e8d5e33b45457b099b7f42b0105f39ddcc621fb890607"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0037.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0037.jpg",
+      "label": "positive_positive_0037.txt",
+      "boxes": 9,
+      "width": 640,
+      "height": 480,
+      "sha256": "fc0ff69b339f44f0d0af582828764aa445a90e2b9b454509f5498248f9de1e1e"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0038.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0038.jpg",
+      "label": "positive_positive_0038.txt",
+      "boxes": 8,
+      "width": 640,
+      "height": 480,
+      "sha256": "5aa47b9f835c3ba74b9f984449dc46fee76c032e79e6606a5033aef22b49f29f"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0039.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0039.jpg",
+      "label": "positive_positive_0039.txt",
+      "boxes": 1,
+      "width": 335,
+      "height": 597,
+      "sha256": "91d35c3d05faff8c3e3f7b6abf760230c6e00b660e0abd04d72423c1a27b6e12"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0040.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0040.jpg",
+      "label": "positive_positive_0040.txt",
+      "boxes": 8,
+      "width": 554,
+      "height": 554,
+      "sha256": "6584a49c434b9ed400d1491f40fd5340eba19c4b2ea821efc3bfe8ac0110bfcc"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0041.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0041.jpg",
+      "label": "positive_positive_0041.txt",
+      "boxes": 11,
+      "width": 590,
+      "height": 312,
+      "sha256": "71ee4d52f0c16c2510e0735b0af638956b84834de890105902636300e9c620e8"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0042.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0042.jpg",
+      "label": "positive_positive_0042.txt",
+      "boxes": 7,
+      "width": 500,
+      "height": 281,
+      "sha256": "cd020c147683b7ad2553efd9767b6f0fe3f7c74173fc94b5dafadcf6ce78efb6"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0043.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0043.jpg",
+      "label": "positive_positive_0043.txt",
+      "boxes": 1,
+      "width": 590,
+      "height": 332,
+      "sha256": "6de6989d9ab56886b0e2c052cb8bffa7a9b73d8aa0154077e2f1963dc96635e0"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0044.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0044.jpg",
+      "label": "positive_positive_0044.txt",
+      "boxes": 4,
+      "width": 768,
+      "height": 432,
+      "sha256": "f05551c558c451b831ba874f37fdb9d86e3e2cd64c7312697720e3c798cd7f4f"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0045.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0045.jpg",
+      "label": "positive_positive_0045.txt",
+      "boxes": 1,
+      "width": 1280,
+      "height": 720,
+      "sha256": "4e8df9863c80e44564c25059ebf908a8fc6b38a7c4de6c341c53b3e1c409d797"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0046.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0046.jpg",
+      "label": "positive_positive_0046.txt",
+      "boxes": 1,
+      "width": 1280,
+      "height": 720,
+      "sha256": "c90aca582858200e0f4292d5c0fce31c802f2b8bdc9b92d58b2766cfd56828b0"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0047.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0047.jpg",
+      "label": "positive_positive_0047.txt",
+      "boxes": 1,
+      "width": 1280,
+      "height": 720,
+      "sha256": "7fc1b9e93dab52e6f18e83c48be44c5f5b7517444f8705f21b285514b4fd0a32"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0048.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0048.jpg",
+      "label": "positive_positive_0048.txt",
+      "boxes": 7,
+      "width": 1200,
+      "height": 900,
+      "sha256": "8ef44383747c91777adee31aebf4e5a4a39abc9e8490d90e676b54c756ef08b6"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0049.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0049.jpg",
+      "label": "positive_positive_0049.txt",
+      "boxes": 1,
+      "width": 608,
+      "height": 342,
+      "sha256": "60f6c92cb464dcab48d055798e2108f7d2385caa911fe2e77d7be3820661bbc5"
+    },
+    {
+      "split": "positive",
+      "image": "positive_positive_0050.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0050.jpg",
+      "label": "positive_positive_0050.txt",
+      "boxes": 1,
+      "width": 2000,
+      "height": 1333,
+      "sha256": "5db5ee38c453018165d438596786bcc9731a8a073a1fce147fbafdf3339530f6"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0001.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0001.jpg",
+      "label": "hard_negative_hard_negative_0001.txt",
+      "boxes": 0,
+      "width": 480,
+      "height": 270,
+      "sha256": "c21db691904413cfe7a30f6f084f2c05288e9a746f3a86f801d7505c196c3c95"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0002.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0002.jpg",
+      "label": "hard_negative_hard_negative_0002.txt",
+      "boxes": 0,
+      "width": 480,
+      "height": 853,
+      "sha256": "fd2c0ddff8e073eedb1df8366aeda1f4674d4ff777e43e642347adc9010bc3b7"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0003.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0003.jpg",
+      "label": "hard_negative_hard_negative_0003.txt",
+      "boxes": 0,
+      "width": 641,
+      "height": 360,
+      "sha256": "862c43616f74d34a4430d31a760e584d142c143d92ab9341d18d359b3b83108a"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0004.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0004.jpg",
+      "label": "hard_negative_hard_negative_0004.txt",
+      "boxes": 0,
+      "width": 683,
+      "height": 360,
+      "sha256": "b52b341e5e230556e418c159559c122c7cfd8ee9979d224a4d8cd79aed4ab124"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0005.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0005.jpg",
+      "label": "hard_negative_hard_negative_0005.txt",
+      "boxes": 0,
+      "width": 894,
+      "height": 938,
+      "sha256": "f89bc7b0a68284287f944c73e6b4db608602113f996d1c33110868b680f00cf5"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0006.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0006.jpg",
+      "label": "hard_negative_hard_negative_0006.txt",
+      "boxes": 0,
+      "width": 700,
+      "height": 1656,
+      "sha256": "cbfc5a7a9d0b5210015f8e56be9292db91a9f185bdab69f413ae9a7eca08e044"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0007.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0007.jpg",
+      "label": "hard_negative_hard_negative_0007.txt",
+      "boxes": 0,
+      "width": 1500,
+      "height": 1000,
+      "sha256": "acacfd344c786f1a7d4af1b9a28a28f7f8c89ee3868e9037470725e161e03083"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0008.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0008.jpg",
+      "label": "hard_negative_hard_negative_0008.txt",
+      "boxes": 0,
+      "width": 2560,
+      "height": 1810,
+      "sha256": "dca5c52294b8b1d43212bd77d52d2b3cb45b4e1d2352a44abf72038983b7066f"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0009.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0009.jpg",
+      "label": "hard_negative_hard_negative_0009.txt",
+      "boxes": 0,
+      "width": 1000,
+      "height": 667,
+      "sha256": "a9ed113209dbaba82a79b3fb10cf5704f02aff39430cc784923f25a0c5badcee"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0010.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0010.jpg",
+      "label": "hard_negative_hard_negative_0010.txt",
+      "boxes": 0,
+      "width": 768,
+      "height": 432,
+      "sha256": "197990c39254311d5774b87e2fc73f83c6f99c7d76457015f9b943f5f774f367"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0011.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0011.jpg",
+      "label": "hard_negative_hard_negative_0011.txt",
+      "boxes": 0,
+      "width": 1244,
+      "height": 700,
+      "sha256": "bda31239db4145f7ea6c4d43edae399b10967b160a005a671758bee6e4859658"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0012.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0012.jpg",
+      "label": "hard_negative_hard_negative_0012.txt",
+      "boxes": 0,
+      "width": 480,
+      "height": 360,
+      "sha256": "ce107215e4086a22f7ced855b8efb3ad1d6bffed575c260866aa2f0b6f815677"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0013.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0013.jpg",
+      "label": "hard_negative_hard_negative_0013.txt",
+      "boxes": 0,
+      "width": 447,
+      "height": 447,
+      "sha256": "6b9813604693972f48567579c52d7914158cbe14657da15ad06e60f1235594fd"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0014.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0014.jpg",
+      "label": "hard_negative_hard_negative_0014.txt",
+      "boxes": 0,
+      "width": 463,
+      "height": 663,
+      "sha256": "234f833a56656956e89b9327d367a181f6a33150cf0b2be8b808cb97f689e291"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0015.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0015.jpg",
+      "label": "hard_negative_hard_negative_0015.txt",
+      "boxes": 0,
+      "width": 415,
+      "height": 739,
+      "sha256": "f1ea10f7d4b44bf5c6e59edb2cbfc9242585a3d8fa5b2eaebdcb4fa4a93b5a61"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0016.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0016.jpg",
+      "label": "hard_negative_hard_negative_0016.txt",
+      "boxes": 0,
+      "width": 335,
+      "height": 597,
+      "sha256": "e788369b7834a3fecc838023d079b305c23c179873bc9e0a473c90c9aada0cc6"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0017.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0017.jpg",
+      "label": "hard_negative_hard_negative_0017.txt",
+      "boxes": 0,
+      "width": 554,
+      "height": 554,
+      "sha256": "cfb10bb975f39b06e5d0ca15157fe64fe777f040016f4b1401145600dbd7b275"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0018.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0018.jpg",
+      "label": "hard_negative_hard_negative_0018.txt",
+      "boxes": 0,
+      "width": 360,
+      "height": 640,
+      "sha256": "1ca5e2e11e8c951b7cf35ac7dafa002ea81bc0a7be4c4b6b7c8c4a4cbe52ae77"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0019.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0019.jpg",
+      "label": "hard_negative_hard_negative_0019.txt",
+      "boxes": 0,
+      "width": 390,
+      "height": 280,
+      "sha256": "8225b8051869e0638345b4ffbfb4880e597d518f8da02b3dcaef65b83912de06"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0020.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0020.jpg",
+      "label": "hard_negative_hard_negative_0020.txt",
+      "boxes": 0,
+      "width": 390,
+      "height": 280,
+      "sha256": "a06b150fb3172bdca84de1f2ad6d21036c1c60d2954c14bf2d95c8c43901ea9d"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0021.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0021.jpg",
+      "label": "hard_negative_hard_negative_0021.txt",
+      "boxes": 0,
+      "width": 390,
+      "height": 280,
+      "sha256": "a6bb40256ae35ff2ae0d851c41b0afc73f464249cfc66bd6a3f6aa83fda3d985"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0022.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0022.jpg",
+      "label": "hard_negative_hard_negative_0022.txt",
+      "boxes": 0,
+      "width": 1280,
+      "height": 720,
+      "sha256": "4066788a75136915a7d9f5054cc4618f71f3ee170b49ed22dc7e367213eaa74f"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0023.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0023.jpg",
+      "label": "hard_negative_hard_negative_0023.txt",
+      "boxes": 0,
+      "width": 3840,
+      "height": 2160,
+      "sha256": "cba8eeb9a173025ccbe13ebe6a83e095a533469700faba01edca7ddee7f00c4b"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0024.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0024.jpg",
+      "label": "hard_negative_hard_negative_0024.txt",
+      "boxes": 0,
+      "width": 634,
+      "height": 441,
+      "sha256": "438be09df8e765b9471784351bfa78f48307dc3f10cd3abba30b631e2781c8d4"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0025.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0025.jpg",
+      "label": "hard_negative_hard_negative_0025.txt",
+      "boxes": 0,
+      "width": 1000,
+      "height": 1000,
+      "sha256": "fa8a2f74bdbf2f178319843a328f8819fa0d8acbc8fb74994c6e01b81fd72ec4"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0026.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0026.jpg",
+      "label": "hard_negative_hard_negative_0026.txt",
+      "boxes": 0,
+      "width": 1200,
+      "height": 1179,
+      "sha256": "72e5339adf8289547de91ed962eea6ef84ed739e4e64f2c18367d44faabed580"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0027.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0027.jpg",
+      "label": "hard_negative_hard_negative_0027.txt",
+      "boxes": 0,
+      "width": 608,
+      "height": 342,
+      "sha256": "1c5c67c25acb2320173ea6f0027dde51a6e1f655b1131554b2c305e0d015767e"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0028.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0028.jpg",
+      "label": "hard_negative_hard_negative_0028.txt",
+      "boxes": 0,
+      "width": 590,
+      "height": 332,
+      "sha256": "0549eed2d79f739e0d7bfd01ae6e9602445837fab923a0af1ec9136f61164b64"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0029.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0029.jpg",
+      "label": "hard_negative_hard_negative_0029.txt",
+      "boxes": 0,
+      "width": 590,
+      "height": 332,
+      "sha256": "cf23e9d71c29f07a0a83b7556b841de5d271d3203c681c82e8e4191e9abbd8db"
+    },
+    {
+      "split": "hard_negative",
+      "image": "hard_negative_hard_negative_0030.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/hard_negatives/hard_negative_0030.jpg",
+      "label": "hard_negative_hard_negative_0030.txt",
+      "boxes": 0,
+      "width": 1500,
+      "height": 1012,
+      "sha256": "0c0589d9f4ffa2f2da41063024251be7a1c09d255b869b7d5a0f57dc455385cd"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000001.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000001.jpg",
+      "label": "negative_000000000001.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "91d74bd2a576101fdc78a448f8f8c52816dda6ec2e37e0bffcb9e30e950647ae"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000009.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000009.jpg",
+      "label": "negative_000000000009.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "35cdfe8259aca40d564baf33ee749d82ce852446bd9574f0c47551d8bfffda99"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000016.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000016.jpg",
+      "label": "negative_000000000016.txt",
+      "boxes": 0,
+      "width": 480,
+      "height": 640,
+      "sha256": "e77b3610a4d60decaf6399090e772f45f6bb69d13902e46f1aa67e6ffa44c05d"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000019.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000019.jpg",
+      "label": "negative_000000000019.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 427,
+      "sha256": "bd645634cc290ad2cba0d0544aea02347edb8510dbc69586d367afc68bafd5ed"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000025.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000025.jpg",
+      "label": "negative_000000000025.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 426,
+      "sha256": "d8f12a26d8803701cabac80494b080f998e5ed9bafaf61a2825ce6212c85487a"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000030.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000030.jpg",
+      "label": "negative_000000000030.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 428,
+      "sha256": "0444b10826d376ad9075805061405f6071a62b80eda29c5f284ed77b093d5b1d"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000034.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000034.jpg",
+      "label": "negative_000000000034.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 425,
+      "sha256": "2c46871034fa901ae795a8bb916ba7f2f728507cab9e511cced0986bd083d193"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000036.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000036.jpg",
+      "label": "negative_000000000036.txt",
+      "boxes": 0,
+      "width": 481,
+      "height": 640,
+      "sha256": "7b04d9d0a1ea8b930e11f293a832bdfe8d43892fdb96f1038219196d41a86b95"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000042.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000042.jpg",
+      "label": "negative_000000000042.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 478,
+      "sha256": "9da8dbb3f415b0549a2c7ef8930e245af324191cc4c4465a7d75f05d96b0781d"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000049.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000049.jpg",
+      "label": "negative_000000000049.txt",
+      "boxes": 0,
+      "width": 381,
+      "height": 500,
+      "sha256": "0a29047d4bd83d26ae5370c03447bfa1ccd7005362ee180510e47af61746273a"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000057.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000057.jpg",
+      "label": "negative_000000000057.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 427,
+      "sha256": "2c00c990da26ba8b195d8e1ffaa1085cad53be95ec8de83c5d4941c1dd0912f2"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000061.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000061.jpg",
+      "label": "negative_000000000061.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 488,
+      "sha256": "03919a304272b466ac9415ecc8eebf7e6ec6d5a370e027ea8ed8c348e73d4024"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000063.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000063.jpg",
+      "label": "negative_000000000063.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "8e6eb85f9bce5a7622123bec2c2b62d182b35f162b1d04f7dc4597ab055ac6db"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000064.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000064.jpg",
+      "label": "negative_000000000064.txt",
+      "boxes": 0,
+      "width": 480,
+      "height": 640,
+      "sha256": "efb62bc395400df8dfe6ab5ea3577913ca029753628f37af4bcca8144fd67af5"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000069.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000069.jpg",
+      "label": "negative_000000000069.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 429,
+      "sha256": "47193896385f8d284f3e20dd457253d2e51d4bd77e7e3531e4731a5f131a4493"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000071.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000071.jpg",
+      "label": "negative_000000000071.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 426,
+      "sha256": "c9e8680a3bdd1021d8cce453d91255df472e9c7cf79bf6312b80b5df8d7b665c"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000072.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000072.jpg",
+      "label": "negative_000000000072.txt",
+      "boxes": 0,
+      "width": 427,
+      "height": 640,
+      "sha256": "34985f0e3d9e71652c47bce8813b6a1925f431c0925a094b37208a97df670a7b"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000073.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000073.jpg",
+      "label": "negative_000000000073.txt",
+      "boxes": 0,
+      "width": 565,
+      "height": 640,
+      "sha256": "a202bf8a3327508e135aa7a2ba01014f67cd68253d2eed33dd7a5e1e24523aef"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000074.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000074.jpg",
+      "label": "negative_000000000074.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 426,
+      "sha256": "de6e1fbb6b8569bb85d2e82c9aa6cc528ac87fba11135c1f3691789a27fc13a5"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000077.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000077.jpg",
+      "label": "negative_000000000077.txt",
+      "boxes": 0,
+      "width": 500,
+      "height": 375,
+      "sha256": "c45ca68cf1c5af1efb6dc04df82e8821580e97862761914e665c7b965850b14d"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000078.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000078.jpg",
+      "label": "negative_000000000078.txt",
+      "boxes": 0,
+      "width": 612,
+      "height": 612,
+      "sha256": "fbf237b294405624b5d662fe7f45a4c1b77bc275ade45f0737f5a6f6b1b6bb19"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000080.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000080.jpg",
+      "label": "negative_000000000080.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 427,
+      "sha256": "77393198302233c5df1f3b5bfe9e7fcd20af37402db4e29692d608aa0090b678"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000081.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000081.jpg",
+      "label": "negative_000000000081.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 425,
+      "sha256": "1a57ac5980eff9d319871e17b5fe17363b5788861957d665cfe9e9c43fc9c27a"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000086.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000086.jpg",
+      "label": "negative_000000000086.txt",
+      "boxes": 0,
+      "width": 512,
+      "height": 640,
+      "sha256": "864844ed9a8606a06c38af494d0117c0b304c73e760e14c87f6966db69731e20"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000089.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000089.jpg",
+      "label": "negative_000000000089.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "617f7bf73b8e7fed4c880b81ade5c780c49024e72284a9e289c3c99c4db315be"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000090.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000090.jpg",
+      "label": "negative_000000000090.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 429,
+      "sha256": "9ff72dc5f69998b7777802f2d6c6dc261c67cf9f5ade8e0f94e030edd422467b"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000092.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000092.jpg",
+      "label": "negative_000000000092.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 427,
+      "sha256": "d9a9119a2677777ef25c06bd69d958cadef38ed2d963121408832f2ebcc9a405"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000094.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000094.jpg",
+      "label": "negative_000000000094.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 427,
+      "sha256": "23b8ce616b0ce10f36f3c7ad3c9b3421bbd7d2eb9f272ab295a93c373a712cc5"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000106.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000106.jpg",
+      "label": "negative_000000000106.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 426,
+      "sha256": "4797648ce66c98cd4d12945b314120aa85b73f32db6a33f5bd07d7a290e872bb"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000108.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000108.jpg",
+      "label": "negative_000000000108.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 427,
+      "sha256": "9dac65dacd78f1dbd389025524ca74055f3441419ec694e54633f699ef4ae1ab"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000109.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000109.jpg",
+      "label": "negative_000000000109.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 416,
+      "sha256": "30d36a203933f94a75758bcf5161e79b81e3e17b22ae0c08cbe8183e575ccebb"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000110.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000110.jpg",
+      "label": "negative_000000000110.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "7ad186705344b4d8ae47e20e3a2c568f1be18f241ab763c32e99bd77d015d53b"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000113.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000113.jpg",
+      "label": "negative_000000000113.txt",
+      "boxes": 0,
+      "width": 416,
+      "height": 640,
+      "sha256": "1525ef8dc93c3994e8594739dab92f58db09fe70c7f126f1f8fde32a07a16bda"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000127.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000127.jpg",
+      "label": "negative_000000000127.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 481,
+      "sha256": "fa5515e89cb4480ac9cfe94b0f8a3b111644ff3c1cff956577aa9bc5f5bb92a8"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000128.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000128.jpg",
+      "label": "negative_000000000128.txt",
+      "boxes": 0,
+      "width": 490,
+      "height": 640,
+      "sha256": "4741971ce3b5f5d3cf46b91ecce5cde63bcad143045c9739ecd39fee8bcd1832"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000133.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000133.jpg",
+      "label": "negative_000000000133.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "9ea5c0b1d9c3efe337f1015fee71f0313955b43aca7059f66ed11ee334e54f3d"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000136.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000136.jpg",
+      "label": "negative_000000000136.txt",
+      "boxes": 0,
+      "width": 500,
+      "height": 374,
+      "sha256": "db678804a652fc15ab7fbdbe5432dd54b1a6856ee07f3e35ff3792c5c97a63de"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000138.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000138.jpg",
+      "label": "negative_000000000138.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 573,
+      "sha256": "169f6284ed9774bc0accf7ffe5f244b9a0d1ed982fbe8ddeb0b0ed530c423dde"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000139.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000139.jpg",
+      "label": "negative_000000000139.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 426,
+      "sha256": "ffe0f0cec3b2e27aab1967229cdf0a0d7751dcdd5800322f0b8ac0dffb3b8a8d"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000142.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000142.jpg",
+      "label": "negative_000000000142.txt",
+      "boxes": 0,
+      "width": 480,
+      "height": 640,
+      "sha256": "c21636393ab181a99c6dfe0256bf756b191fa23f3200cdc6eab2985c30941e68"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000143.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000143.jpg",
+      "label": "negative_000000000143.txt",
+      "boxes": 0,
+      "width": 600,
+      "height": 500,
+      "sha256": "dc8d4ed2439067e0cf80d51fdaf398750e6ec82ddc0a167aaca6b509792063c9"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000144.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000144.jpg",
+      "label": "negative_000000000144.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "5e7eb3b39670e20b96b7f8b952ed3a29dbafaca7049169c633bc152e55266a75"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000149.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000149.jpg",
+      "label": "negative_000000000149.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 428,
+      "sha256": "d5d652a6e92fc9ac6f255b950aa2ace2645f9480f22eae9c367318dc28415e71"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000151.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000151.jpg",
+      "label": "negative_000000000151.txt",
+      "boxes": 0,
+      "width": 480,
+      "height": 640,
+      "sha256": "107e1f06d2ed2ced90e6f02ae2a5056080abcb0c07efa7dd198db9b61d78c276"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000154.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000154.jpg",
+      "label": "negative_000000000154.txt",
+      "boxes": 0,
+      "width": 427,
+      "height": 640,
+      "sha256": "0c726be74f7b08dc54fd021adc50a74643de87179d26df743a3689d7b1343d51"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000155.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000155.jpg",
+      "label": "negative_000000000155.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 427,
+      "sha256": "413ead1673ab92a827f3225de59b3100f591bb64f7886b31b692a712592ebe49"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000161.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000161.jpg",
+      "label": "negative_000000000161.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "22eaba0e35f9e452c8e208aabb570dcb5f92fe16d0d30cc28e44a22d613370d6"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000164.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000164.jpg",
+      "label": "negative_000000000164.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "cea63a308dfa9f011406113b78fd864563a2f47467ba3c7b3bf065ad82f2c333"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000165.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000165.jpg",
+      "label": "negative_000000000165.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 536,
+      "sha256": "50f1895bb22c6dda602ab7c7768fa659b5f01d2238330aa28a431aa9f11b0b44"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000171.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000171.jpg",
+      "label": "negative_000000000171.txt",
+      "boxes": 0,
+      "width": 500,
+      "height": 417,
+      "sha256": "51f983839ec43b66572f88b187c8da76902e2da62967cf1b7fc8f8444bf544f6"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000178.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000178.jpg",
+      "label": "negative_000000000178.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "47a086149db68c389925d97da1c56ca05e5375a3c29f418a61c5a155a5e6d9a2"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000180.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000180.jpg",
+      "label": "negative_000000000180.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 427,
+      "sha256": "01a19909f472d5fd46e3604c164166b422e51995f06496b790a2e80576c90262"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000183.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000183.jpg",
+      "label": "negative_000000000183.txt",
+      "boxes": 0,
+      "width": 500,
+      "height": 333,
+      "sha256": "d343304d2ebbb3a9bb59cde3083635a2fd9dd6e5a2fea1f2ae0f0c8fa41c2bd8"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000188.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000188.jpg",
+      "label": "negative_000000000188.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "fec52523612a7388ec2139335ac58631fdc1b0b3cf2f3541d28102c694f069e2"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000191.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000191.jpg",
+      "label": "negative_000000000191.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 427,
+      "sha256": "93c7d9e4330838b2aa1f7985a11dcc19bc6ab7c37101ece712abaf7b65a37bfd"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000192.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000192.jpg",
+      "label": "negative_000000000192.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "146520b06866c3b199697a6525a3d3d86cd6a5a99d175d7fc887319fafd7b62c"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000194.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000194.jpg",
+      "label": "negative_000000000194.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "c6458eb0170f986588a9231f80a54be09425ed2b91ef4c02215e557458a26bb7"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000196.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000196.jpg",
+      "label": "negative_000000000196.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 480,
+      "sha256": "b3e948b5204edad6d3a340c941e9e300f3a19db555b52833bbcd95adf478bd8f"
+    },
+    {
+      "split": "negative",
+      "image": "negative_000000000201.jpg",
+      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/negatives/000000000201.jpg",
+      "label": "negative_000000000201.txt",
+      "boxes": 0,
+      "width": 640,
+      "height": 428,
+      "sha256": "253b935888af3f1fec4d02a9e3e626c77e46526df57593807b2cb4df8aa07933"
+    }
+  ]
+}

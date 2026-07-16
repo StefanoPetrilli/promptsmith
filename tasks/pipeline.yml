@@ -207,7 +207,8 @@ tasks:
       - "{{.PY}} pipeline/train_yolo.py --images data/synthetic/approved/images --labels data/synthetic/approved/labels \
         --val-images verification_dataset/assembled/images --val-labels verification_dataset/assembled/labels \
         --out data/dataset --base models/yolo26n.pt --epochs 500 --patience 20 \
-        --imgsz 640 --scale 0.5 --translate 0.2"
+        --imgsz 640 --scale 0.5 --translate 0.2 \
+        --mosaic 1.0 --mixup 0.3 --copy-paste 0.3 --hsv-v 0.6 --closemosaic 30"
 
   train-test:
     desc: "Stage 7 (test): 1-epoch smoke -> data/dataset/"

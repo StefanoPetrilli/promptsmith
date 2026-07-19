@@ -20,13 +20,12 @@ from pipeline.combinations import (
     LIGHTINGS,
     ORIENTATIONS,
     PLAIN_BACKGROUNDS,
-    SHOP_ITEMS,
     SURFACES,
     WRENCH_TYPES,
 )
 
 POSITIVE_MODES = ("clean_positive", "hard_positive", "asset")
-NEGATIVE_MODES = ("hard_negative", "pure_negative")
+NEGATIVE_MODES = ("hard_negative",)
 ALL_MODES = POSITIVE_MODES + NEGATIVE_MODES
 
 _DIST_WEIGHTS = {
@@ -130,23 +129,11 @@ def build_hard_negative(rng: random.Random) -> str:
     ]))
 
 
-def build_pure_negative(rng: random.Random) -> str:
-    ax = _common_axes(rng, "clean_positive")
-    return _cap(_join([
-        rng.choice(SHOP_ITEMS),
-        f"in {ax['scene']}",
-        f"on {ax['surface']}",
-        ax["distance"], ax["lighting"],
-        "photorealistic",
-    ]))
-
-
 BUILDERS = {
     "clean_positive": build_clean_positive,
     "hard_positive": build_hard_positive,
     "asset": build_asset,
     "hard_negative": build_hard_negative,
-    "pure_negative": build_pure_negative,
 }
 
 

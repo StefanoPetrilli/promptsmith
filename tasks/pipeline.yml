@@ -6,19 +6,12 @@ version: "3"
 #
 #   prompts               stage 1 — weighted-axis prompts -> data/prompts/<mode>/
 #   images                stage 2 — FLUX.2-klein-4B render every leaf -> data/synthetic/images/
-#   images-test           stage 2 — render first 3 prompts per leaf
 #   label                 stage 3 — SAM 3 text-grounded wrench boxes -> data/synthetic/labels/
-#   label-test            stage 3 — label first 3 images per leaf
 #   visualize             stage 4 — overlay SAM 3 masks + boxes -> data/synthetic/visuals/
-#   visualize-test        stage 4 — overlay first 3 images per leaf
 #   handpick              stage 5 — human approve/discard of segmentations -> data/synthetic/approved/(+discarded/)
-#   handpick-test         stage 5 — review first 3 segmentations per leaf
 #   postprocess           stage 6 — Albumentations degradation (approved only) -> data/synthetic/images_pp/
-#   postprocess-test      stage 6 — degrade first 3 approved images per leaf
 #   visualize-pp          stage 6b — overlay YOLO boxes on degraded images -> data/synthetic/visuals_pp/
-#   visualize-pp-test     stage 6b — overlay first 3 degraded images per leaf
 #   train                 stage 7 — assemble dataset + fine-tune YOLO (approved only) -> data/dataset/
-#   train-test            stage 7 — 1-epoch smoke -> data/dataset/
 #
 # data/ layout:
 #   data/prompts/            stage 1 seed prompts
@@ -43,7 +36,7 @@ vars:
   N_ASSET: "10"
   # negatives
   N_HARD_NEG: "50"
-  N_PURE_NEG: "20"
+  N_PURE_NEG: "40"
 
 tasks:
   prompts:
@@ -57,7 +50,7 @@ tasks:
       - "{{.PY}} pipeline/generate_prompts.py --mode asset --n {{.N_ASSET}} --out data/prompts"
       # negatives — no wrench
       - "{{.PY}} pipeline/generate_prompts.py --mode hard_negative --n {{.N_HARD_NEG}} --out data/prompts"
-      - "{{.PY}} pipeline/generate_prompts.py --mode pure_negative --n {{.N_PURE_NEG}} --out data/prompts"
+      - "{{.PY}} pipeline/sample_coco_negatives.py --n {{.N_PURE_NEG}} --out data/synthetic/images/pure_negative"
 
   images:
     desc: "Stage 2: render every leaf prompt folder with FLUX.2-klein-4B -> data/synthetic/images/"
@@ -70,17 +63,6 @@ tasks:
         --prefix {rel}_
         -- --model {{.MODEL}} --size {{.SIZE}} --steps {{.STEPS}}
 
-  images-test:
-    desc: "Stage 2 (test): render first 3 prompts per leaf -> data/synthetic/images/"
-    cmds:
-      - >-
-        {{.PY}} pipeline/run_leaves.py
-        --root data/prompts --marker prompts.txt
-        --out-root data/synthetic/images --input-arg prompts
-        --script pipeline/generate_images.py
-        --prefix {rel}_
-        -- --model {{.MODEL}} --size {{.SIZE}} --steps {{.STEPS}} --limit 3
-
   label:
     desc: "Stage 3: label each leaf with SAM 3 (text 'wrench', conf>=0.55) -> data/synthetic/labels/"
     cmds:
@@ -91,16 +73,6 @@ tasks:
         --script pipeline/label_images.py
         -- --model-path {{.SAM3_CKPT}} --confidence 0.55
 
-  label-test:
-    desc: "Stage 3 (test): label first 3 images per leaf -> data/synthetic/labels/"
-    cmds:
-      - >-
-        {{.PY}} pipeline/run_leaves.py
-        --root data/synthetic/images --marker manifest.jsonl
-        --out-root data/synthetic/labels --input-arg images
-        --script pipeline/label_images.py
-        -- --model-path {{.SAM3_CKPT}} --confidence 0.55 --limit 3
-
   visualize:
     desc: "Stage 4: overlay SAM 3 segmentation + boxes on all images -> data/synthetic/visuals/"
     cmds:
@@ -110,16 +82,6 @@ tasks:
         --out-root data/synthetic/visuals --input-arg labels
         --script pipeline/visualize_labels.py
         --
-
-  visualize-test:
-    desc: "Stage 4 (test): overlay first 3 images per leaf -> data/synthetic/visuals/"
-    cmds:
-      - >-
-        {{.PY}} pipeline/run_leaves.py
-        --root data/synthetic/labels --marker labels.jsonl
-        --out-root data/synthetic/visuals --input-arg labels
-        --script pipeline/visualize_labels.py
-        -- --limit 3
 
   handpick:
     desc: "Stage 5: human approve/discard of segmentations -> data/synthetic/approved/ (+discarded/)"
@@ -132,18 +94,6 @@ tasks:
         --out-root data/synthetic/approved
         --discard-root data/synthetic/discarded
 
-  handpick-test:
-    desc: "Stage 5 (test): review first 3 segmentations per leaf"
-    cmds:
-      - >-
-        {{.PY}} pipeline/handpick.py
-        --visuals-root data/synthetic/visuals
-        --images-root data/synthetic/images
-        --labels-root data/synthetic/labels
-        --out-root data/synthetic/approved
-        --discard-root data/synthetic/discarded
-        --limit 3
-
   postprocess:
     desc: "Stage 6: deterministic Albumentations degradation (approved only) -> data/synthetic/images_pp/"
     cmds:
@@ -154,16 +104,6 @@ tasks:
         --script pipeline/postprocess_images.py
         --
 
-  postprocess-test:
-    desc: "Stage 6 (test): degrade first 3 approved images per leaf -> data/synthetic/images_pp/"
-    cmds:
-      - >-
-        {{.PY}} pipeline/run_leaves.py
-        --root data/synthetic/approved/images --marker manifest.jsonl
-        --out-root data/synthetic/images_pp --input-arg images
-        --script pipeline/postprocess_images.py
-        -- --limit 3
-
   visualize-pp:
     desc: "Stage 6b: overlay YOLO boxes on post-processed images -> data/synthetic/visuals_pp/"
     cmds:
@@ -172,15 +112,6 @@ tasks:
         --images data/synthetic/images_pp
         --labels data/synthetic/approved/labels
         --out data/synthetic/visuals_pp
-
-  visualize-pp-test:
-    desc: "Stage 6b (test): overlay first 3 post-processed images per leaf -> data/synthetic/visuals_pp/"
-    cmds:
-      - >-
-        {{.PY}} pipeline/visualize_labels.py --format yolo
-        --images data/synthetic/images_pp
-        --labels data/synthetic/approved/labels
-        --out data/synthetic/visuals_pp --limit 3
 
   assemble-verification:
     desc: "Assemble + version the real verification dataset -> verification_dataset/assembled/ (images/ labels/ manifest.json VERSION)"
@@ -209,13 +140,6 @@ tasks:
         --out data/dataset --base models/yolo26n.pt --epochs 500 --patience 0 \
         --imgsz 640 --scale 0.5 --translate 0.2 \
         --mosaic 1.0 --mixup 0.3 --copy-paste 0.3 --hsv-v 0.6 --closemosaic 30"
-
-  train-test:
-    desc: "Stage 7 (test): 1-epoch smoke -> data/dataset/"
-    cmds:
-      - "{{.PY}} pipeline/train_yolo.py --images data/synthetic/approved/images --labels data/synthetic/approved/labels \
-        --out data/dataset --base models/yolo26n.pt --epochs 1 --imgsz 320 --batch 1 \
-        --allow-dummy-labels"
 
   inference-train:
     desc: "Run trained model on the training set and save visualizations"

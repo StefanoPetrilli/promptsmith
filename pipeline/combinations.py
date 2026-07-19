@@ -108,12 +108,3 @@ PLAIN_BACKGROUNDS = [
     "a white seamless", "a gray seamless",
     "an off-white sweep", "a pure black", "a white cyclorama",
 ]
-
-# Non-confuser shop items for pure_negative (no wrench, no confusers).
-SHOP_ITEMS = [
-    "a stack of bolts", "a coil of wire", "a roll of duct tape",
-    "a parts bin", "a shop vacuum", "a battery charger",
-    "jumper cables", "a pile of shop rags", "a fluid funnel",
-    "a measuring tape", "a flashlight", "a shop press",
-    "a jack stand", "a creeper seat", "an air hose reel",
-]

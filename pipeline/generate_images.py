@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Step 2 — render prompts into images with FLUX.2-klein-4B (fp16).
+"""Step 2 — render prompts into images with FLUX.2-klein-9B (fp16).
 
 Embeddings from Qwen3 are precomputed once, streamed to a numpy memmap, and released
 before the transformer loads. Generation resumes from existing PNGs and uses an
@@ -39,14 +39,17 @@ EMBED_MEMMAP_SUFFIX = ".embeds.npy"
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="FLUX.2-klein-4B image generation (step 2).")
-    p.add_argument("--model", default="black-forest-labs/FLUX.2-klein-4B")
+    p = argparse.ArgumentParser(description="FLUX.2-klein-9B image generation (step 2).")
+    p.add_argument("--model", default="black-forest-labs/FLUX.2-klein-9B")
     p.add_argument("--prompts", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--size", type=int, default=768)
     p.add_argument("--steps", type=int, default=8)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--dtype", choices=["fp16", "bf16", "fp32"], default="fp16")
+    p.add_argument("--quant", choices=["none", "int8"], default="none",
+                   help="int8: bitsandbytes 8-bit weight-only quantization of the transformer "
+                        "(halves VRAM -> more blocks pinned; requires sm>=7.5)")
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--vram-margin", type=float, default=1.2)
     p.add_argument("--prefix", default="")
@@ -250,31 +253,35 @@ def apply_partial_pin(pipe, vram_margin_gb: float = 1.2):
     for name in small_modules:
         getattr(transformer, name).to(cuda)
 
-    for block in transformer.transformer_blocks:
-        block.to(cuda)
-
-    single_blocks = transformer.single_transformer_blocks
-    single_mb = module_size_mb(single_blocks[0]) if single_blocks else 0.0
     free_gb = free_vram_gb(cuda)
-    budget_gb = free_gb - vram_margin_gb
-    n_pin = max(0, min(len(single_blocks), int(budget_gb * 1e3 / single_mb))) if single_mb else len(single_blocks)
+    margin_b = vram_margin_gb * 1e9
 
-    log.info(
-        "partial-pin: free=%.2f GB, margin=%.1f GB -> pin %d/%d single blocks (%.0f MB), offload %d.",
-        free_gb, vram_margin_gb, n_pin, len(single_blocks), n_pin * single_mb,
-        len(single_blocks) - n_pin,
-    )
+    def pin_group(blocks: list[torch.nn.Module], name: str) -> int:
+        """Greedily pin blocks on GPU while the margin holds; offload the rest via hooks.
 
-    for i, block in enumerate(single_blocks):
-        if i < n_pin:
+        Measured by actually moving each block (parameter introspection misreports
+        sizes for quantized tensor subclasses, e.g. torchao int8)."""
+        n = 0
+        for block in blocks:
             block.to(cuda)
-        else:
+            if torch.cuda.mem_get_info(cuda)[0] < margin_b:
+                block.to("cpu")
+                torch.cuda.empty_cache()
+                break
+            n += 1
+        for block in blocks[n:]:
             offload_hooks(block, cuda, torch.device("cpu"))
+        log.info("partial-pin: %s -> pinned %d/%d, offloaded %d.", name, n, len(blocks), len(blocks) - n)
+        return n
+
+    blocks = list(transformer.transformer_blocks) + list(transformer.single_transformer_blocks)
+    pin_group(blocks, "transformer blocks")
+    log.info("partial-pin: free=%.2f GB, margin=%.1f GB.", free_gb, vram_margin_gb)
 
     torch.cuda.empty_cache()
 
 
-def build_pipeline(model_id: str, dtype: torch.dtype, tokenizer, vram_margin: float):
+def build_pipeline(model_id: str, dtype: torch.dtype, tokenizer, vram_margin: float, quant: str = "none"):
     from diffusers import (
         AutoencoderKLFlux2,
         Flux2KleinPipeline,
@@ -298,8 +305,18 @@ def build_pipeline(model_id: str, dtype: torch.dtype, tokenizer, vram_margin: fl
             return None
 
     scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(model_id, subfolder="scheduler")
+    tf_kwargs: dict = {"torch_dtype": dtype}
+    if quant == "int8":
+        from diffusers import BitsAndBytesConfig
+        tf_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_8bit=True, llm_int8_enable_fp32_cpu_offload=True,
+        )
+        gpu_budget = max(1.0, free_vram_gb(torch.device("cuda")) - vram_margin)
+        tf_kwargs["device_map"] = "auto"
+        tf_kwargs["max_memory"] = {0: f"{gpu_budget:.1f}GiB", "cpu": "12GiB"}
+        log.info("Quantizing transformer to int8 (bitsandbytes); GPU budget %.1f GiB.", gpu_budget)
     transformer = Flux2Transformer2DModel.from_pretrained(
-        model_id, subfolder="transformer", torch_dtype=dtype,
+        model_id, subfolder="transformer", **tf_kwargs,
     )
     vae = AutoencoderKLFlux2.from_pretrained(model_id, subfolder="vae", torch_dtype=torch.float16)
 
@@ -311,7 +328,11 @@ def build_pipeline(model_id: str, dtype: torch.dtype, tokenizer, vram_margin: fl
         transformer=transformer,
         is_distilled=True,
     )
-    apply_partial_pin(pipe, vram_margin_gb=vram_margin)
+    if quant == "int8":
+        # accelerate already placed/dispatched the quantized transformer via device_map.
+        pipe.vae.to(torch.device("cuda"))
+    else:
+        apply_partial_pin(pipe, vram_margin_gb=vram_margin)
     pipe.set_progress_bar_config(disable=True)
     torch.cuda.empty_cache()
     return pipe
@@ -407,7 +428,7 @@ def main() -> int:
             log.info("All images already generated.")
             return 0
 
-    pipe = build_pipeline(a.model, dtype, tokenizer, a.vram_margin)
+    pipe = build_pipeline(a.model, dtype, tokenizer, a.vram_margin, a.quant)
 
     with manifest.open("a", encoding="utf-8") as mf:
         todo = [i for i in range(len(prompts)) if i not in done]

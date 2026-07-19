@@ -5,7 +5,7 @@ version: "3"
 # The test variants write to the SAME folders as the normal tasks (no `_test` dirs).
 #
 #   prompts               stage 1 — weighted-axis prompts -> data/prompts/<mode>/
-#   images                stage 2 — FLUX.2-klein-4B render every leaf -> data/synthetic/images/
+#   images                stage 2 — FLUX.2-klein-9B render every leaf -> data/synthetic/images/
 #   label                 stage 3 — SAM 3 text-grounded wrench boxes -> data/synthetic/labels/
 #   visualize             stage 4 — overlay SAM 3 masks + boxes -> data/synthetic/visuals/
 #   handpick              stage 5 — human approve/discard of segmentations -> data/synthetic/approved/(+discarded/)
@@ -23,10 +23,10 @@ version: "3"
 
 vars:
   PY: .venv/bin/python
-  MODEL: black-forest-labs/FLUX.2-klein-4B
+  MODEL: black-forest-labs/FLUX.2-klein-9B
   SAM3_CKPT: models/sam3/sam3.pt
   SIZE: "768"
-  STEPS: "8"
+  STEPS: "4"
   # --- prompt counts per mode (tune the dataset size from here) --------------
   # clean_positive
   N_CLEAN: "170"
@@ -53,7 +53,7 @@ tasks:
       - "{{.PY}} pipeline/sample_coco_negatives.py --n {{.N_PURE_NEG}} --out data/synthetic/images/pure_negative"
 
   images:
-    desc: "Stage 2: render every leaf prompt folder with FLUX.2-klein-4B -> data/synthetic/images/"
+    desc: "Stage 2: render every leaf prompt folder with FLUX.2-klein-9B -> data/synthetic/images/"
     cmds:
       - >-
         {{.PY}} pipeline/run_leaves.py

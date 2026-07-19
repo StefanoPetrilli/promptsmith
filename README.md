@@ -9,7 +9,7 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 | # | Task | What it does |
 |---|------|--------------|
 | 1 | `pipeline:prompts` (`--test`) | Write N varied wrench prompts → `data/prompts/<mode>/prompts.txt` (positives + synthetic **hard-negative** confusers) **and** sample N real wrench-free negatives from COCO val2017 → `data/synthetic/images/pure_negative/` |
-| 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-4B** (fp16 + partial GPU pinning; Qwen3 embeds precomputed + cached) → `data/synthetic/images/` (skips the COCO leaf — it has no `prompts.txt`) |
+| 2 | `pipeline:images` (`images-test`) | Render prompts with **FLUX.2-klein-9B** (fp16 + partial GPU pinning; Qwen3 embeds precomputed + cached) → `data/synthetic/images/` (skips the COCO leaf — it has no `prompts.txt`) |
 | 3 | `pipeline:label` (`label-test`) | Text-grounded boxes/masks with **SAM 3** ("wrench") → YOLO `.txt` + `labels.jsonl` + mask PNGs in `data/synthetic/labels/` |
 | 4 | `pipeline:visualize` (`visualize-test`) | Overlay segmentation + boxes on the images → `data/synthetic/visuals/` |
 | 5 | `pipeline:handpick` (`handpick-test`) | Human approve/discard of segmentations → `data/synthetic/approved/` (+discarded) |
@@ -25,7 +25,7 @@ Each `*-test` variant runs on a handful of images for a quick smoke check.
 Each `*-test` variant runs on a handful of images for a quick smoke check.
 
 ## Requirements
-- Python 3.10+, NVIDIA GPU (~6 GB VRAM) + ~8 GB free RAM. The FLUX.2-klein-4B transformer + VAE run fp16 (lossless) via partial GPU pinning (most blocks on GPU, rest offloaded per-block); Qwen3 text embeddings are precomputed + cached to disk, then released. SAM 3 runs on GPU.
+- Python 3.10+, NVIDIA GPU (~6 GB VRAM) + ~8 GB free RAM. The FLUX.2-klein-9B transformer + VAE run fp16 (lossless) via partial GPU pinning (most blocks on GPU, rest offloaded per-block); Qwen3 text embeddings are precomputed + cached to disk, then released. SAM 3 runs on GPU.
 - [go-task](https://taskfile.dev) 3.x.
 
 ## Quickstart

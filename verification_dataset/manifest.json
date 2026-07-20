@@ -1,19 +1,19 @@
 {
   "name": "numeri verification dataset",
   "task": "single-class object detection (wrench)",
-  "version": "v1-20260716-45f859ea6d11",
-  "created_utc": "2026-07-16T13:47:47Z",
+  "version": "v1-20260720-3f96734e4cde",
+  "created_utc": "2026-07-20T12:26:48Z",
   "classes": [
     "wrench"
   ],
   "splits": {
-    "positive": 50,
+    "positive": 48,
     "hard_negative": 30,
     "negative": 59
   },
   "totals": {
-    "images": 139,
-    "labeled_boxes": 188,
+    "images": 137,
+    "labeled_boxes": 183,
     "negatives": 89
   },
   "layout": {
@@ -251,26 +251,6 @@
       "width": 335,
       "height": 597,
       "sha256": "b7bfc7052f89d73aa7b7a9aa3bc624bc87fb87d33a74e38dbbf33aa495776dbd"
-    },
-    {
-      "split": "positive",
-      "image": "positive_positive_0024.jpg",
-      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0024.jpg",
-      "label": "positive_positive_0024.txt",
-      "boxes": 3,
-      "width": 596,
-      "height": 335,
-      "sha256": "6f5dbfa763dc61796464cd8ef3590532fd7ddd38ea305c0269f1e5daa9a92f25"
-    },
-    {
-      "split": "positive",
-      "image": "positive_positive_0025.jpg",
-      "source": "/home/stefanopetrilli/repos/numeri/verification_dataset/positive/positive_0025.jpg",
-      "label": "positive_positive_0025.txt",
-      "boxes": 2,
-      "width": 516,
-      "height": 387,
-      "sha256": "1142937a719aa8e9aaedc84556d641e395c5d68de024a768d91e23026503714f"
     },
     {
       "split": "positive",

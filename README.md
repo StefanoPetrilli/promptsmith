@@ -16,6 +16,7 @@ A fully-local pipeline that builds a small **single-class YOLO detector** (targe
 | 6 | `pipeline:postprocess` (`postprocess-test`) | Albumentations degradation (approved only) → `data/synthetic/images_pp/` |
 | 6b | `pipeline:visualize-pp` (`visualize-pp-test`) | Overlay YOLO boxes on degraded images → `data/synthetic/visuals_pp/` |
 | 7 | `pipeline:train` (`train-test`) | Assemble train/val split + fine-tune **YOLOv8n** → `data/dataset/runs/` |
+| 8 | `pipeline:inference-eval` | Run the trained model on the val split vs. GT boxes → `data/inference/val/` |
 |   | `pipeline:assemble-verification` | Stage + version the real verification dataset → `verification_dataset/assembled/` |
 |   | `pipeline:train-real-val` | Train on synthetic images, validate on the real verification dataset |
 |   | `pipeline:inference-verification` | Run the trained model on the verification dataset vs. GT |

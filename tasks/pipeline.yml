@@ -12,6 +12,7 @@ version: "3"
 #   postprocess           stage 6 — Albumentations degradation (approved only) -> data/synthetic/images_pp/
 #   visualize-pp          stage 6b — overlay YOLO boxes on degraded images -> data/synthetic/visuals_pp/
 #   train                 stage 7 — assemble dataset + fine-tune YOLO (approved only) -> data/dataset/
+#   inference-eval        stage 8 — run trained model on the val split vs GT boxes -> data/inference/val/
 #
 # data/ layout:
 #   data/prompts/            stage 1 seed prompts
@@ -29,13 +30,15 @@ vars:
   STEPS: "4"
   # --- prompt counts per mode (tune the dataset size from here) --------------
   # clean_positive
-  N_CLEAN: "170"
+  N_CLEAN: "200"
   # hard_positive
-  N_HARD: "50"
+  N_HARD: "120"
+  # dense_positive
+  N_DENSE: "120"
   # asset
-  N_ASSET: "10"
+  N_ASSET: "40"
   # negatives
-  N_HARD_NEG: "50"
+  N_HARD_NEG: "60"
   N_PURE_NEG: "40"
 
 tasks:
@@ -46,6 +49,8 @@ tasks:
       - "{{.PY}} pipeline/generate_prompts.py --mode clean_positive --n {{.N_CLEAN}} --out data/prompts"
       # hard_positive — small / distant / occluded / frame-edge / cluttered wrenches
       - "{{.PY}} pipeline/generate_prompts.py --mode hard_positive --n {{.N_HARD}} --out data/prompts"
+      # dense_positive — multiple wrenches (pegboard, tool sets, drawers)
+      - "{{.PY}} pipeline/generate_prompts.py --mode dense_positive --n {{.N_DENSE}} --out data/prompts"
       # asset — isolated product shots on plain backgrounds
       - "{{.PY}} pipeline/generate_prompts.py --mode asset --n {{.N_ASSET}} --out data/prompts"
       # negatives — no wrench
@@ -127,40 +132,18 @@ tasks:
         --out verification_dataset/assembled/visuals"
 
   train:
-    desc: "Stage 7: assemble single-class YOLO dataset (from approved images_pp/) + fine-tune"
-    cmds:
-      - "{{.PY}} pipeline/train_yolo.py --images data/synthetic/approved/images --labels data/synthetic/approved/labels \
-        --out data/dataset --base models/yolo26n.pt --epochs 50"
-
-  train-real-val:
     desc: "Stage 7: train on approved synthetic, validate on real verification dataset (assembled)"
     cmds:
       - "{{.PY}} pipeline/train_yolo.py --images data/synthetic/approved/images --labels data/synthetic/approved/labels \
         --val-images verification_dataset/assembled/images --val-labels verification_dataset/assembled/labels \
-        --out data/dataset --base models/yolo26n.pt --epochs 500 --patience 0 \
-        --imgsz 640 --scale 0.5 --translate 0.2 \
-        --mosaic 1.0 --mixup 0.3 --copy-paste 0.3 --hsv-v 0.6 --closemosaic 30"
+        --out data/dataset --base models/yolo26n.pt --epochs 300 --patience 50 \
+        --imgsz 768 --scale 0.5 --translate 0.2 \
+        --mosaic 1.0 --mixup 0.3 --copy-paste 0.3 --hsv-v 0.6 --closemosaic 100"
 
-  inference-train:
-    desc: "Run trained model on the training set and save visualizations"
-    cmds:
-      - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
-        --source data/dataset/images/train \
-        --gt-labels data/dataset/labels/train \
-        --out data/inference/train"
-
-  inference-val:
-    desc: "Run trained model on the validation set and save visualizations"
+  inference-eval:
+    desc: "Stage 8: run trained model on the validation set vs GT boxes and save visualizations -> data/inference/val/"
     cmds:
       - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
         --source data/dataset/images/val \
         --gt-labels data/dataset/labels/val \
         --out data/inference/val"
-
-  inference-verification:
-    desc: "Run trained model on the verification dataset, compare to GT boxes"
-    cmds:
-      - "{{.PY}} pipeline/inference.py --model data/dataset/runs/train/weights/best.pt \
-        --source verification_dataset/assembled/images \
-        --gt-labels verification_dataset/assembled/labels \
-        --out data/inference/verification"

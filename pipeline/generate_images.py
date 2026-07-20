@@ -205,8 +205,14 @@ def precompute_prompt_embeds(
 
     for h in handles:
         h.remove()
+    captured.clear()
+    # Release Qwen3 fully before FLUX loads: drop the module, collect refs
+    # (pinned layers, hooks, embed_tokens), then return cached VRAM to the driver.
+    te.to("cpu")
     del te
     gc.collect()
+    torch.cuda.empty_cache()
+    log.info("Qwen3 released; free VRAM: %.2f GB.", free_vram_gb(torch.device("cuda")))
 
 
 def memmap_is_valid(mm: np.ndarray, chunk: int = 64) -> bool:
@@ -427,6 +433,11 @@ def main() -> int:
         if len(done) == len(prompts):
             log.info("All images already generated.")
             return 0
+
+    # Defensive: nothing but FLUX should hold VRAM from here on.
+    gc.collect()
+    torch.cuda.empty_cache()
+    log.info("Free VRAM before loading FLUX: %.2f GB.", free_vram_gb(torch.device("cuda")))
 
     pipe = build_pipeline(a.model, dtype, tokenizer, a.vram_margin, a.quant)
 

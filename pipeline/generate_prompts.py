@@ -14,6 +14,10 @@ if __package__ in (None, ""):
 from pipeline.combinations import (
     ARRANGEMENTS,
     CONFUSERS,
+    DENSE_ARRANGEMENTS,
+    DENSE_COUNTS,
+    DENSE_FINISHES,
+    DENSE_WRENCH_SETS,
     DISTANCES,
     ENVIRONMENTS,
     FINISHES,
@@ -24,15 +28,18 @@ from pipeline.combinations import (
     WRENCH_TYPES,
 )
 
-POSITIVE_MODES = ("clean_positive", "hard_positive", "asset")
+POSITIVE_MODES = ("clean_positive", "hard_positive", "dense_positive", "asset")
 NEGATIVE_MODES = ("hard_negative",)
 ALL_MODES = POSITIVE_MODES + NEGATIVE_MODES
 
 _DIST_WEIGHTS = {
     "clean_positive": [3, 4, 2, 1, 1, 1],
     "hard_positive": [1, 1, 2, 3, 3, 4],
+    "dense_positive": [1, 1, 2, 3, 3, 4],
     "asset": [2, 4, 2, 1, 1, 1],
 }
+
+_QUALITY_SUFFIX = "no text, no watermark, no logo, no caption, no letters, photorealistic"
 
 
 def _weighted_choice(rng: random.Random, values: list[str], weights: list[float]) -> str:
@@ -75,7 +82,7 @@ def _positive_text(framing: str, subtype: str, finish: str, ax: dict) -> str:
         framing,
         f"{ax['arrangement']} on {ax['surface']} in {ax['scene']}",
         ax["orientation"], ax["distance"], ax["lighting"],
-        "photorealistic",
+        _QUALITY_SUFFIX,
     ]))
 
 
@@ -100,6 +107,22 @@ def build_hard_positive(rng: random.Random) -> str:
     return _positive_text(framing, subtype, finish, ax)
 
 
+def build_dense_positive(rng: random.Random) -> str:
+    count = rng.choice(DENSE_COUNTS)
+    finish = rng.choice(DENSE_FINISHES)
+    tool_set = rng.choice(DENSE_WRENCH_SETS)
+    arrangement = rng.choice(DENSE_ARRANGEMENTS)
+    scene = rng.choice(ENVIRONMENTS)
+    lighting = rng.choice(LIGHTINGS)
+    distance = _weighted_choice(rng, DISTANCES, _DIST_WEIGHTS["dense_positive"])
+    return _cap(_join([
+        f"{count} {finish} {tool_set}",
+        f"{arrangement} in {scene}",
+        distance, lighting,
+        _QUALITY_SUFFIX,
+    ]))
+
+
 def build_asset(rng: random.Random) -> str:
     subtype = rng.choice(WRENCH_TYPES)
     finish = rng.choice(FINISHES)
@@ -110,7 +133,7 @@ def build_asset(rng: random.Random) -> str:
         "fully in frame, clearly separated",
         f"on {bg} background",
         ax["orientation"], ax["distance"], ax["lighting"],
-        "photorealistic, studio product shot",
+        f"{_QUALITY_SUFFIX}, studio product shot",
     ]))
 
 
@@ -125,13 +148,14 @@ def build_hard_negative(rng: random.Random) -> str:
         _confuser_phrase(confuser),
         f"{ax['arrangement']} on {ax['surface']} in {ax['scene']}",
         ax["distance"], ax["lighting"],
-        "photorealistic",
+        _QUALITY_SUFFIX,
     ]))
 
 
 BUILDERS = {
     "clean_positive": build_clean_positive,
     "hard_positive": build_hard_positive,
+    "dense_positive": build_dense_positive,
     "asset": build_asset,
     "hard_negative": build_hard_negative,
 }

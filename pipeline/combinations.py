@@ -13,8 +13,7 @@ WRENCH_TYPES = [
     "box-end wrench",
     "stubby wrench",
     "flare-nut wrench",
-    "open-end wrench",
-    "flex combination wrench"
+    "open-end wrench"
 ]
 
 FINISHES = [
@@ -101,6 +100,32 @@ CONFUSERS = [
     "pry bar", "flathead screwdriver", "Phillips screwdriver",
     "socket extension bar", "hex-bit driver", "locking pliers",
     "diagonal cutter", "needle-nose pliers",
+]
+
+# --- dense / multi-instance positive prompts ------------------------------
+
+DENSE_COUNTS = ["three", "four", "five", "six", "eight"]
+DENSE_ARRANGEMENTS = [
+    "laid out in a row",
+    "hanging on a pegboard",
+    "arranged in an open toolbox drawer",
+    "scattered on a workbench",
+    "lined up on a cloth tool roll",
+    "stacked on a steel shelf",
+    "mounted on a wall rack",
+    "placed in a parts tray",
+]
+DENSE_FINISHES = [
+    "chrome", "polished chrome", "chrome-vanadium", "brushed steel",
+    "rusty", "greasy", "matte black oxide", "nickel-plated",
+]
+DENSE_WRENCH_SETS = [
+    "combination wrenches",
+    "open-end wrenches",
+    "box-end wrenches",
+    "crescent adjustable wrenches",
+    "wrenches of different sizes",
+    "combination and open-end wrenches",
 ]
 
 # Plain backgrounds for asset mode.

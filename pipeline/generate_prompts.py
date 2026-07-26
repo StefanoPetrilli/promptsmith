@@ -24,11 +24,17 @@ from pipeline.combinations import (
     LIGHTINGS,
     ORIENTATIONS,
     PLAIN_BACKGROUNDS,
+    SET_ARRANGEMENTS,
+    SET_BACKGROUNDS,
+    SET_COUNTS,
+    SET_DISTANCES,
+    SET_WRENCH_SETS,
+    SET_WRENCH_SET_WEIGHTS,
     SURFACES,
     WRENCH_TYPES,
 )
 
-POSITIVE_MODES = ("clean_positive", "hard_positive", "dense_positive", "asset")
+POSITIVE_MODES = ("clean_positive", "hard_positive", "dense_positive", "asset", "set_positive")
 NEGATIVE_MODES = ("hard_negative",)
 ALL_MODES = POSITIVE_MODES + NEGATIVE_MODES
 
@@ -141,6 +147,22 @@ def _confuser_phrase(confuser: str) -> str:
     return f"{_article(confuser)}{confuser}"
 
 
+def build_set_positive(rng: random.Random) -> str:
+    count = rng.choice(SET_COUNTS)
+    tool_set = _weighted_choice(rng, SET_WRENCH_SETS, SET_WRENCH_SET_WEIGHTS)
+    finish = rng.choice(DENSE_FINISHES)
+    arrangement = rng.choice(SET_ARRANGEMENTS)
+    bg = rng.choice(SET_BACKGROUNDS)
+    distance = rng.choice(SET_DISTANCES)
+    lighting = rng.choice(LIGHTINGS)
+    return _cap(_join([
+        f"{count} {finish} {tool_set}",
+        f"{arrangement} on {bg}",
+        distance, lighting,
+        f"{_QUALITY_SUFFIX}, catalog product photo",
+    ]))
+
+
 def build_hard_negative(rng: random.Random) -> str:
     confuser = rng.choice(CONFUSERS)
     ax = _common_axes(rng, "hard_positive")
@@ -157,6 +179,7 @@ BUILDERS = {
     "hard_positive": build_hard_positive,
     "dense_positive": build_dense_positive,
     "asset": build_asset,
+    "set_positive": build_set_positive,
     "hard_negative": build_hard_negative,
 }
 

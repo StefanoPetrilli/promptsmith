@@ -30,13 +30,15 @@ vars:
   STEPS: "4"
   # --- prompt counts per mode (tune the dataset size from here) --------------
   # clean_positive
-  N_CLEAN: "200"
+  N_CLEAN: "250"
   # hard_positive
-  N_HARD: "120"
+  N_HARD: "170"
   # dense_positive
-  N_DENSE: "120"
+  N_DENSE: "170"
   # asset
-  N_ASSET: "40"
+  N_ASSET: "120"
+  # set_positive (overlapping wrench-set catalog shots)
+  N_SET: "200"
   # negatives
   N_HARD_NEG: "60"
   N_PURE_NEG: "40"
@@ -53,6 +55,8 @@ tasks:
       - "{{.PY}} pipeline/generate_prompts.py --mode dense_positive --n {{.N_DENSE}} --out data/prompts"
       # asset — isolated product shots on plain backgrounds
       - "{{.PY}} pipeline/generate_prompts.py --mode asset --n {{.N_ASSET}} --out data/prompts"
+      # set_positive — overlapping wrench-set rows/fans on plain backgrounds (targets val FNs)
+      - "{{.PY}} pipeline/generate_prompts.py --mode set_positive --n {{.N_SET}} --out data/prompts"
       # negatives — no wrench
       - "{{.PY}} pipeline/generate_prompts.py --mode hard_negative --n {{.N_HARD_NEG}} --out data/prompts"
       - "{{.PY}} pipeline/sample_coco_negatives.py --n {{.N_PURE_NEG}} --out data/synthetic/images/pure_negative"
@@ -136,9 +140,9 @@ tasks:
     cmds:
       - "{{.PY}} pipeline/train_yolo.py --images data/synthetic/approved/images --labels data/synthetic/approved/labels \
         --val-images verification_dataset/assembled/images --val-labels verification_dataset/assembled/labels \
-        --out data/dataset --base models/yolo26n.pt --epochs 300 --patience 50 \
+        --out data/dataset --base models/yolo26n.pt --epochs 200 --patience 50 \
         --imgsz 768 --scale 0.5 --translate 0.2 \
-        --mosaic 1.0 --mixup 0.3 --copy-paste 0.3 --hsv-v 0.6 --closemosaic 100"
+        --mosaic 1.0 --mixup 0.3 --copy-paste 0.3 --hsv-v 0.4 --closemosaic 80"
 
   inference-eval:
     desc: "Stage 8: run trained model on the validation set vs GT boxes and save visualizations -> data/inference/val/"

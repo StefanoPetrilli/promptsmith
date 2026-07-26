@@ -133,3 +133,35 @@ PLAIN_BACKGROUNDS = [
     "a white seamless", "a gray seamless",
     "an off-white sweep", "a pure black", "a white cyclorama",
 ]
+
+# --- set_positive: overlapping wrench-set "catalog" shots (e-commerce style) ----
+# Targets the biggest FN cluster in the real verification set: 5-12 wrenches in
+# overlapping rows/fans on plain backgrounds.
+SET_COUNTS = ["five", "six", "seven", "eight", "ten", "twelve"]
+SET_WRENCH_SETS = [
+    "crescent adjustable wrenches",
+    "crescent adjustable wrenches of different sizes",
+    "combination wrenches of different sizes",
+    "ratcheting combination wrenches of different sizes",
+    "combination wrenches",
+    "open-end wrenches of different sizes",
+]
+# adjustable wrenches dominate the real-set FNs -> weight them up
+SET_WRENCH_SET_WEIGHTS = [3, 3, 2, 2, 1, 1]
+SET_ARRANGEMENTS = [
+    "overlapping in a descending-size row",
+    "fanned out, heads overlapping",
+    "overlapping in a neat row",
+    "overlapping, alternating direction head-to-handle",
+    "fanned in an arc, handles overlapping",
+    "stacked in a loose overlapping pile",
+]
+SET_BACKGROUNDS = [
+    "a white seamless background",
+    "a plain cardboard sheet",
+    "a kraft paper sheet",
+    "a bare wooden table",
+    "a gray seamless background",
+    "a bare plywood board",
+]
+SET_DISTANCES = ["close-up", "medium shot", "mid-distance"]

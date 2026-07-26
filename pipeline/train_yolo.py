@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--patience", type=int, default=50)
     p.add_argument("--imgsz", type=int, default=768)
-    p.add_argument("--batch", type=int, default=8)
+    p.add_argument("--batch", type=int, default=24)
     p.add_argument("--device", default="0")
     p.add_argument("--val-frac", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=42)

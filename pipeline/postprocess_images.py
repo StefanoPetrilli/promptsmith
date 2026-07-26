@@ -99,7 +99,7 @@ def build_pipeline():
             A.MotionBlur(blur_limit=(3, 5), p=1.0),
             A.AdvancedBlur(blur_limit=(3, 5), sigma_x_limit=(0.2, 0.8), sigma_y_limit=(0.2, 0.8),
                            rotate_limit=(-45, 45), beta_limit=(0.5, 6.0), p=1.0),
-            A.Blur(blur_limit=(3, 4), p=1.0),
+            A.Blur(blur_limit=(3, 5), p=1.0),
         ], p=0.2),
 
         # --- cheap-ISP oversharpening + JPEG ringing ---

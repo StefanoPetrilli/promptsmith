@@ -14,6 +14,7 @@ models/
 *.jpg
 *.jpeg
 *.pt
+!assets/teaser.png
 
 # the verification dataset is a small, curated, versioned hold-out -> tracked in git
 !verification_dataset/

@@ -1,5 +1,7 @@
 # PromptSmith
 
+
+![pipeline](assets/teaser.png)
 Prompt-to-model computer vision, on consumer hardware.
 
 This pipeline uses highly capable models to teach a small and efficient model to solve a
